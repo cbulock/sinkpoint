@@ -2,6 +2,12 @@
 
 An Android-only hidden-fleet game built with Kotlin, Jetpack Compose, and Material 3. The abstract pieces, rounded surfaces, dynamic colors, and screen patterns follow the supplied Minescape family design guide.
 
+## Download
+
+[Website](https://cbulock.github.io/sinkpoint/) · [Download the latest APK](https://github.com/cbulock/sinkpoint/releases/latest/download/sinkpoint.apk) · [Release notes](https://github.com/cbulock/sinkpoint/releases/latest) · [Privacy](https://cbulock.github.io/sinkpoint/privacy.html)
+
+Requires Android 8.0 or later; nearby multiplayer also needs Google Play services. Open the APK on your phone and allow installation from your browser or file manager when prompted. Published APKs are debug-signed previews with a stable signing certificate, so later downloads update an existing preview installation.
+
 ## Play
 
 - **Main menu:** Solo opens the difficulty chooser; Multiplayer opens nearby hosting and joining. Both modes stay prominent at the top. Continue playing lists unfinished saves with their mode and setup or shot status; completed boards appear separately in Recent games. Game options, Learn to play, and Statistics remain directly accessible.
@@ -32,7 +38,15 @@ Outputs:
 - Lint report: `app/build/reports/lint-results-debug.html`
 - Rendered layout checks: `app/build/outputs/screenshots/`
 
-The debug APK uses the standard local Android debug certificate. No publishing or release signing is configured.
+The local debug APK uses the standard local Android debug certificate.
+
+### Automatic public APK builds
+
+`.github/workflows/android-apk.yml` runs unit/UI tests and Android lint, builds the debug APK, verifies its signature, and publishes `sinkpoint.apk` plus its SHA-256 checksum to GitHub Releases on successful pushes to `main` or manual runs on `main`. Pull requests run the checks and upload temporary build artifacts without access to the publishing key or creating releases.
+
+Publishing requires the repository secret `ANDROID_DEBUG_KEYSTORE_BASE64`, containing the stable Android debug keystore (alias `androiddebugkey`, standard Android debug passwords). Keep the key private and preserve it across builds. The workflow explicitly signs the APK and verifies the certificate against that key before publishing. CI sets an increasing version code using `1000 + GITHUB_RUN_NUMBER`; local builds retain version code 1. The stable `/releases/latest/download/sinkpoint.apk` URL always points to the latest successful published build.
+
+The static website lives in `docs/`; GitHub Pages publishes `main` → `/docs`. APK delivery uses GitHub Releases. Play Store and AAB publication are not configured.
 
 ### Toolchain compatibility
 
