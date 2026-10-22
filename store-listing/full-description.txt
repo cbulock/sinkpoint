@@ -1,0 +1,24 @@
+Place your fleet, read the board, and choose your next shot. Sinkpoint is a hidden-fleet strategy game for Android, with solo opponents and nearby multiplayer.
+
+PLAY SOLO OR WITH SOMEONE NEARBY
+Choose Easy, Normal, or Hard for a solo match. Easy gives you room to learn, while Normal and Hard use your shot history to hunt for the rest of your fleet. Solo play works offline.
+
+For a two-player game, host or join a nearby match on separate Android devices. Compare the pairing code, agree on the rules, and keep your fleet hidden on your own screen. Nearby play uses Bluetooth and Wi-Fi through Google Play services; no internet connection or router is required.
+
+CHOOSE YOUR RULES
+Start with the familiar 10 by 10 board and five-piece fleet, or change the board size, fleet lengths, and whether pieces may touch. Custom boards range from 6 by 6 to 12 by 12.
+
+Play Classic with one shot at a time, or choose Salvo to select one target for each surviving piece. In Classic, a hit gives you another shot by default. Turn that option off if you prefer to alternate after every shot.
+
+PLACE, AIM, FIRE
+Drag pieces onto the board and rotate them into position, or use tap-to-place controls. Random placement arranges the whole fleet for you, ready for any final adjustments.
+
+Tap a target, check your choice, then press Fire. Hits, misses, sunk pieces, and fleet indicators keep the match easy to follow. Pinch to zoom and pan when you want a closer look.
+
+PICK UP WHERE YOU LEFT OFF
+Solo and nearby matches save separately on your device. Leave a game and return later, review recent results, and track your statistics. Export a backup of your settings, solo progress, and statistics through Android's file picker. Nearby matches stay on their original devices.
+
+AT HOME ON ANDROID
+Use light, dark, or device themes, with wallpaper colors on supported devices. Layouts adapt to phones, tablets, and landscape screens. Learn the rules in the built-in guide, adjust haptics, and use accessible board labels and actions.
+
+No ads or accounts. Sinkpoint has no app analytics or game server. Nearby multiplayer requires Google Play services and Bluetooth/Wi-Fi permissions; Google's Nearby service may collect diagnostics as described in the privacy policy.

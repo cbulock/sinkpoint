@@ -179,6 +179,10 @@ h1 em { color: var(--purple); font-style: normal; }
 .closing > p:not(.section-kicker) { max-width: 680px; margin-left: auto; margin-right: auto; }
 .closing p.download-links { margin: 24px auto 0; font-size: .94rem; }
 .download-links a { color: white; text-underline-offset: 4px; }
+.download-alternative { max-width: 660px; margin: 28px auto 0; }
+.download-alternative summary { width: fit-content; min-height: 44px; margin: 0 auto; padding: 10px 4px; color: #e7e4ff; font-size: .94rem; cursor: pointer; }
+.download-alternative summary:hover { color: white; }
+.download-alternative summary:focus-visible { outline: 3px solid white; outline-offset: 5px; border-radius: 4px; }
 
 footer { width: min(calc(100% - 40px), var(--max)); min-height: 150px; margin: 0 auto; display: flex; align-items: center; gap: 34px; }
 .footer-brand { margin-right: auto; }

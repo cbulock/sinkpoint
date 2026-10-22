@@ -1,6 +1,12 @@
 # Sinkpoint validation
 
-Latest verification: October 13, 2026. This file distinguishes local automated checks from physical-device acceptance; dated sections below retain earlier results.
+Latest verification: October 18, 2026. This file distinguishes local automated checks from physical-device acceptance; dated sections below retain earlier results.
+
+### Tablet space usage — October 18, 2026
+
+Tall tablets now prioritize a larger target board above a row containing the own fleet and firing controls. Wide tablets combine opponent progress and firing controls in one footer row. Short landscape windows retain side controls, and portrait placement expands beyond the former 540 dp cap.
+
+Passed 24 targeted tests across `GameplayLayoutTest`, `LayoutTest`, `FoldPlacementTest`, and `TurnHapticsTest`, plus `lintDebug` and `assembleDebug`. Coverage includes tablet board dimensions and target selection, portrait and landscape, smaller tablets, phones, folds, and 200% text. Reviewed native renders `tablet-portrait-adaptive.png`, `tablet-landscape-adaptive.png`, and `tablet-light-placement.png` in `app/build/outputs/screenshots/`. Refreshed the debug APK checksum. Physical tablet testing was not performed.
 
 ### Sinkpoint rename — October 13, 2026
 

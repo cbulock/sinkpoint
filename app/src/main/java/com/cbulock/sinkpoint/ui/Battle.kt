@@ -37,6 +37,23 @@ import com.cbulock.sinkpoint.game.*
     val available = !ui.storageBlocked && !ui.busy
     val linked = ui.mode == Mode.AI || ui.connected && ui.synchronized
     val canFire = available && linked && !ui.exchangePending && match.phase == Phase.PLAYING && match.current == match.localId
+    // Track turn ownership separately from availability so saving/reconnecting cannot repeat the cue.
+    var previousPlayer by rememberSaveable(match.id) { mutableStateOf(match.current) }
+    var turnFeedbackPending by rememberSaveable(match.id) { mutableStateOf(false) }
+    LaunchedEffect(match.current, match.phase, canFire, ui.mode, ui.preferences.haptics) {
+        if (ui.mode != Mode.NEARBY || match.phase != Phase.PLAYING) {
+            turnFeedbackPending = false
+        } else {
+            if (previousPlayer != match.current) {
+                turnFeedbackPending = match.current == match.localId
+            }
+            if (turnFeedbackPending && canFire) {
+                if (ui.preferences.haptics) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                turnFeedbackPending = false
+            }
+        }
+        previousPlayer = match.current
+    }
     val status = stringResource(when {
         match.phase == Phase.FINISHED -> outcomeTitle(match)
         !linked || ui.storageBlocked -> R.string.paused
@@ -56,7 +73,9 @@ import com.cbulock.sinkpoint.game.*
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val largeText = LocalDensity.current.fontScale > 1.3f
         val wide = maxWidth >= 640.dp && !largeText
-        val landscape = wide && maxHeight < maxWidth * .65f
+        val landscape = wide && maxHeight < 480.dp
+        val tallTablet = wide && maxHeight >= maxWidth * 1.25f
+        val wideTablet = wide && maxWidth >= 1000.dp
         val boardLimit = (maxHeight - 62.dp).coerceAtLeast(152.dp)
         val header: @Composable () -> Unit = {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -93,7 +112,29 @@ import com.cbulock.sinkpoint.game.*
             BattleBoard(match, false, chosen, canFire, { select(it) }, Modifier.weight(1f), boardLimit, opponentFleet = ui.opponentFleet)
             BattleBoard(match, true, chosen, canFire, { select(it) }, Modifier.weight(1f), boardLimit, opponentFleet = ui.opponentFleet)
         }
-        if (landscape) {
+        if (tallTablet) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                header()
+                BoxWithConstraints(Modifier.weight(1.7f).fillMaxWidth()) {
+                    BattleBoard(match, false, chosen, canFire, { select(it) },
+                        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                        (maxHeight - 80.dp).coerceAtLeast(152.dp), opponentFleet = ui.opponentFleet)
+                }
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+                        BattleBoard(match, true, chosen, canFire, { select(it) },
+                            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                            (maxHeight - 80.dp).coerceAtLeast(152.dp), opponentFleet = ui.opponentFleet)
+                    }
+                    Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        actions(true)
+                        OpponentProgress(match)
+                        connection()
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+        } else if (landscape) {
             Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp), content = boards)
                 Column(Modifier.width(224.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -129,11 +170,18 @@ import com.cbulock.sinkpoint.game.*
                 }
             }
             }
-            if (wide) OpponentProgress(match, compact = true)
-            if (ownBoard && !wide && match.phase == Phase.PLAYING) {
+            if (wideTablet) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.weight(1f)) { OpponentProgress(match) }
+                Box(Modifier.weight(1f)) { actions(false) }
+            }
+            else if (ownBoard && !wide && match.phase == Phase.PLAYING) {
                 Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.labelLarge)
                 Button(onClick = { ownBoard = false }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.return_to_target)) }
-            } else actions(largeText)
+            } else {
+                if (wide) OpponentProgress(match, compact = true)
+                actions(largeText)
+            }
             Spacer(Modifier.height(4.dp))
         }
     }

@@ -82,6 +82,36 @@ class GameplayLayoutTest {
         compose.onNodeWithContentDescription(label).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, status))
     }
 
+    @Test @Config(qualifiers = "w800dp-h1280dp-xhdpi")
+    fun portraitTabletPrioritizesTargetAndKeepsFleetAndFireVisible() {
+        val vm = GameViewModel(ApplicationProvider.getApplicationContext<Application>(), MemoryRepository(), NoRadio())
+        compose.setContent { SinkpointTheme(ThemeMode.LIGHT) { SinkpointApp(UiState(loaded = true, screen = Screen.GAME, match = match), vm) } }
+        val target = compose.onNodeWithTag("target-play-board").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val own = compose.onNodeWithTag("own-play-board").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val fire = compose.onNodeWithTag("fire-action").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val density = compose.activity.resources.displayMetrics.density
+        assertTrue("Target board should use the tablet's available space", target.width >= 600f * density)
+        assertTrue(target.bottom < own.top)
+        assertTrue(own.right < fire.left)
+        compose.onNodeWithContentDescription("A1, untried").performClick()
+        compose.onNodeWithText("Fire").assertIsEnabled()
+        capture("tablet-portrait-adaptive")
+    }
+
+    @Test @Config(qualifiers = "w1280dp-h800dp-land-xhdpi")
+    fun landscapeTabletUsesFullWidthForBoards() {
+        val vm = GameViewModel(ApplicationProvider.getApplicationContext<Application>(), MemoryRepository(), NoRadio())
+        compose.setContent { SinkpointTheme(ThemeMode.DARK) { SinkpointApp(UiState(loaded = true, screen = Screen.GAME, match = match), vm) } }
+        val target = compose.onNodeWithTag("target-play-board").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val own = compose.onNodeWithTag("own-play-board").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val fire = compose.onNodeWithTag("fire-action").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue(target.width >= 480f * compose.activity.resources.displayMetrics.density)
+        assertEquals(target.width, own.width, 1f)
+        assertTrue(target.right < own.left)
+        assertTrue(fire.top > target.bottom)
+        capture("tablet-landscape-adaptive")
+    }
+
     private fun capture(name: String) {
         compose.runOnIdle {
             val view = compose.activity.window.decorView

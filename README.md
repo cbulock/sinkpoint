@@ -4,9 +4,18 @@ An Android-only hidden-fleet game built with Kotlin, Jetpack Compose, and Materi
 
 ## Download
 
-[Website](https://cbulock.github.io/sinkpoint/) · [Download the latest APK](https://github.com/cbulock/sinkpoint/releases/latest/download/sinkpoint.apk) · [Release notes](https://github.com/cbulock/sinkpoint/releases/latest) · [Privacy](https://cbulock.github.io/sinkpoint/privacy.html)
+[Get it on Google Play](https://play.google.com/store/apps/details?id=com.cbulock.sinkpoint) · [Website](https://cbulock.github.io/sinkpoint/) · [Privacy](https://cbulock.github.io/sinkpoint/privacy.html)
 
-Requires Android 8.0 or later; nearby multiplayer also needs Google Play services. Open the APK on your phone and allow installation from your browser or file manager when prompted. Published APKs are debug-signed previews with a stable signing certificate, so later downloads update an existing preview installation.
+Requires Android 8.0 or later; nearby multiplayer also needs Google Play services.
+
+<details>
+<summary>Other download options</summary>
+
+[Download the latest preview APK](https://github.com/cbulock/sinkpoint/releases/latest/download/sinkpoint.apk) · [Preview release notes](https://github.com/cbulock/sinkpoint/releases/latest) · [SHA-256 checksum](https://github.com/cbulock/sinkpoint/releases/latest/download/sinkpoint.apk.sha256)
+
+Open the APK on your phone and allow installation from your browser or file manager when prompted. Published APKs are debug-signed previews with a stable signing certificate, so later downloads update an existing preview installation.
+
+</details>
 
 ## Play
 
@@ -14,7 +23,7 @@ Requires Android 8.0 or later; nearby multiplayer also needs Google Play service
 - **AI:** Easy searches randomly, Normal uses the original Hard placement-scoring strategy, and Hard models complete possible fleets, coordinates whole salvos, and simulates finishing sequences. Small Classic endgames are solved exactly within a fixed work budget. Hard also tests its own fleet placements against different attack styles before choosing a layout. All shooting strategies use only public shot history and preserve deterministic save/resume behavior.
 - **Rules:** standard 10×10 with lengths 5/4/3/3/2, or custom 6–12 square boards, 1–10 pieces of lengths 2–6, touching rules, and classic/salvo turns. Classic enables **Fire again after a hit** by default for both players (including AI); a miss ends the turn. Disable it in Game options to alternate after every shot. Salvo always alternates after each volley. Options apply to new games; existing saves retain their original rules.
 - **Placement:** drag pieces from the tray onto the board, or grab any segment to move them. Valid drops save immediately; an icon rotates the selected piece. Tap-to-place is also available. The outlined Random button beside Rotate arranges the whole fleet; tap again for another layout or adjust pieces before Ready. Remove and Clear remain in the menu until Ready.
-- **Shots:** tap a cell, then press the prominent crosshair Fire button. In salvo, select one target per surviving piece. No undo after firing. Ship icons below each grid show afloat/sunk status, with damaged segments on your own ships. Wide screens show both boards with a fixed firing area below; short landscape screens retain side controls. Phones keep the opponent's hit/sunk totals and latest volley above the board tabs, with turn status and Fire in the bottom action area. Tap the opponent summary to inspect your fleet, then use Back to targeting to return.
+- **Shots:** tap a cell, then press the prominent crosshair Fire button. In salvo, select one target per surviving piece. No undo after firing. Ship icons below each grid show afloat/sunk status, with damaged segments on your own ships. Portrait tablets give targeting a large upper board, with your fleet and firing controls together below. Landscape tablets show two large boards with a fixed firing area below; short landscape screens retain side controls. Placement boards expand to the available tablet width. Phones keep the opponent's hit/sunk totals and latest volley above the board tabs, with turn status and Fire in the bottom action area. Tap the opponent summary to inspect your fleet, then use Back to targeting to return.
 - **Saves:** one AI match and one nearby match, saved independently. Back preserves progress. Replacing unfinished progress requires confirmation.
 - **Nearby:** one player hosts and the other joins. Compare the pairing code, accept the rules, and place fleets. Both devices keep their own hidden fleet. A dropped connection pauses play; reconnect using the same two saved matches.
 - **Accessibility:** 48 dp ordinary controls, grid semantics, pinch-to-zoom/pan, large-text layouts, and device/light/dark themes. Battle screens omit the zoom toolbar to leave more room for the boards; pinch inward to return to the full board. Canvas coordinates scale with tiles; TalkBack provides cell state and selection actions.
@@ -46,7 +55,7 @@ The local debug APK uses the standard local Android debug certificate.
 
 Publishing requires the repository secret `ANDROID_DEBUG_KEYSTORE_BASE64`, containing the stable Android debug keystore (alias `androiddebugkey`, standard Android debug passwords). Keep the key private and preserve it across builds. The workflow explicitly signs the APK and verifies the certificate against that key before publishing. CI sets an increasing version code using `1000 + GITHUB_RUN_NUMBER`; local builds retain version code 1. The stable `/releases/latest/download/sinkpoint.apk` URL always points to the latest successful published build.
 
-The static website lives in `docs/`; GitHub Pages publishes `main` → `/docs`. APK delivery uses GitHub Releases. Play Store and AAB publication are not configured.
+The static website lives in `docs/`; GitHub Pages publishes `main` → `/docs`. Google Play is the primary download source; preview APKs remain available through GitHub Releases. Automated Play Store and AAB publication are not configured. Prepared Play Store descriptions, graphics, phone/tablet screenshots, and upload instructions are in [store-listing/store-listing.md](store-listing/store-listing.md); reproduce the package with `StoreListingCaptureTest` and `scripts/build-store-listing.py`.
 
 ### Toolchain compatibility
 

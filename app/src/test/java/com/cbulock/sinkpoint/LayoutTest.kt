@@ -64,6 +64,11 @@ class LayoutTest {
         if (!large && RuntimeEnvironment.getApplication().resources.configuration.screenWidthDp < 640) compose.onNodeWithContentDescription("J10, untried").assertIsDisplayed()
         compose.onNodeWithText("Ready").assertIsDisplayed()
         compose.onNodeWithText("Random").assertIsDisplayed().assertIsEnabled()
+        if (name == "tablet-light") {
+            val board = compose.onNodeWithTag("placement-board").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            org.junit.Assert.assertTrue("Placement should use the tablet width", board.width > 700f * compose.activity.resources.displayMetrics.density)
+            compose.onNodeWithContentDescription("J10, untried").assertIsDisplayed()
+        }
         compose.runOnIdle { state.value = state.value.copy(screen = Screen.SETTINGS) }
         capture("settings")
         compose.onNodeWithText("Import backup").performScrollTo().assertIsDisplayed()
@@ -78,6 +83,8 @@ class LayoutTest {
     @Test @Config(qualifiers = "w800dp-h360dp-land-xhdpi") fun landscapeDark() = render("landscape-dark", dark = true)
     @Test @Config(qualifiers = "w800dp-h1280dp-xhdpi") fun tabletLight() = render("tablet-light")
     @Test @Config(qualifiers = "w800dp-h1280dp-xhdpi") fun tabletDark() = render("tablet-dark", dark = true)
+    @Test @Config(qualifiers = "w640dp-h960dp-xhdpi") fun smallTablet() = render("small-tablet")
+    @Test @Config(qualifiers = "w800dp-h1280dp-xhdpi") fun tabletLargeText() = render("tablet-large-text", large = true)
     @Test @Config(qualifiers = "w360dp-h640dp-xhdpi") fun largeTextLight() = render("large-text-light", large = true)
     @Test @Config(qualifiers = "w360dp-h640dp-xhdpi") fun largeTextDark() = render("large-text-dark", dark = true, large = true)
 }

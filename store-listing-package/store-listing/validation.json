@@ -1,0 +1,130 @@
+{
+  "character_counts": {
+    "title.txt": 9,
+    "short-description.txt": 68,
+    "full-description.txt": 2247
+  },
+  "screenshots": [
+    {
+      "file": "phone-screenshots/01-classic-gameplay.png",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 106023
+    },
+    {
+      "file": "phone-screenshots/02-fleet-placement.png",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 104173
+    },
+    {
+      "file": "phone-screenshots/03-dark-theme.png",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 102860
+    },
+    {
+      "file": "phone-screenshots/04-game-options.png",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 95306
+    },
+    {
+      "file": "phone-screenshots/05-main-menu.png",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 106678
+    },
+    {
+      "file": "phone-screenshots/06-nearby-play.png",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 129470
+    },
+    {
+      "file": "phone-screenshots/07-learn-to-play.png",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 61473
+    },
+    {
+      "file": "phone-screenshots/08-settings-and-backup.png",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 110612
+    },
+    {
+      "file": "phone-landscape-screenshots/01-classic-gameplay.png",
+      "width": 1920,
+      "height": 1080,
+      "bytes": 104211
+    },
+    {
+      "file": "phone-landscape-screenshots/02-fleet-placement.png",
+      "width": 1920,
+      "height": 1080,
+      "bytes": 93650
+    },
+    {
+      "file": "phone-landscape-screenshots/03-dark-theme.png",
+      "width": 1920,
+      "height": 1080,
+      "bytes": 104352
+    },
+    {
+      "file": "phone-landscape-screenshots/04-game-options.png",
+      "width": 1920,
+      "height": 1080,
+      "bytes": 67175
+    },
+    {
+      "file": "tablet-screenshots/portrait/01-classic-gameplay.png",
+      "width": 1440,
+      "height": 2560,
+      "bytes": 84391
+    },
+    {
+      "file": "tablet-screenshots/portrait/02-fleet-placement.png",
+      "width": 1440,
+      "height": 2560,
+      "bytes": 78363
+    },
+    {
+      "file": "tablet-screenshots/portrait/03-dark-theme.png",
+      "width": 1440,
+      "height": 2560,
+      "bytes": 85895
+    },
+    {
+      "file": "tablet-screenshots/portrait/04-game-options.png",
+      "width": 1440,
+      "height": 2560,
+      "bytes": 156263
+    },
+    {
+      "file": "tablet-screenshots/landscape/01-classic-gameplay.png",
+      "width": 2560,
+      "height": 1440,
+      "bytes": 121741
+    },
+    {
+      "file": "tablet-screenshots/landscape/02-fleet-placement.png",
+      "width": 2560,
+      "height": 1440,
+      "bytes": 100122
+    },
+    {
+      "file": "tablet-screenshots/landscape/03-dark-theme.png",
+      "width": 2560,
+      "height": 1440,
+      "bytes": 118133
+    },
+    {
+      "file": "tablet-screenshots/landscape/04-game-options.png",
+      "width": 2560,
+      "height": 1440,
+      "bytes": 100370
+    }
+  ],
+  "capture": "Native Compose / Robolectric SDK 30, deterministic demo match; not physical-device captures"
+}

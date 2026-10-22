@@ -121,7 +121,7 @@ private fun Modifier.placementGesture(
             // Reserve a readable tray before sizing the board, rather than letting
             // an unweighted square consume almost all of the row's width.
             val landscape = maxWidth >= 600.dp && maxWidth > maxHeight && LocalDensity.current.fontScale <= 1.3f
-            val boardLimit = if (landscape) minOf(maxHeight - 16.dp, maxWidth - 272.dp).coerceAtLeast(120.dp) else 540.dp
+            val boardLimit = if (landscape) minOf(maxHeight - 16.dp, maxWidth - 272.dp).coerceAtLeast(120.dp) else maxWidth - 32.dp
             val headingAndTray: @Composable () -> Unit = {
                 if (ui.mode == Mode.NEARBY && (!ui.connected || !ui.synchronized)) {
                     Text(stringResource(R.string.paused_detail))
