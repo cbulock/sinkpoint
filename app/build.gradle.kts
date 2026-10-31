@@ -4,6 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
+apply(from = rootProject.file("gradle/versioning.gradle.kts"))
+
 android {
     namespace = "com.cbulock.sinkpoint"
     compileSdk = 36
@@ -12,8 +14,8 @@ android {
         applicationId = "com.cbulock.sinkpoint"
         minSdk = 26
         targetSdk = 36
-        versionCode = providers.gradleProperty("apkVersionCode").orNull?.toInt() ?: 1
-        versionName = "0.1.0"
+        versionCode = extra["appVersionCode"] as Int
+        versionName = extra["appVersionName"] as String
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true }

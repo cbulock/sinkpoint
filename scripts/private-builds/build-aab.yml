@@ -1,0 +1,201 @@
+# Install this workflow in the PRIVATE cbulock/sinkpoint-builds repository only.
+name: Build private AAB
+
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: private-aab
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Find tested source and pending release
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAY_ENABLED: ${{ vars.PLAY_UPLOAD_ENABLED }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)" = true || { echo 'AAB destination must be private'; exit 1; }
+          sha="$(gh api repos/cbulock/sinkpoint/commits/main --jq .sha)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          tag="source-$sha"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          publish=false
+          if [ "$PLAY_ENABLED" = true ]; then
+            publish=true
+          else
+            echo 'Google Play uploads await one-time setup. See docs/google-play-releases.md in cbulock/sinkpoint.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          conclusion="$(gh api "repos/cbulock/sinkpoint/actions/workflows/android-apk.yml/runs?branch=main&event=push&head_sha=$sha&per_page=1" --jq '.workflow_runs[0].conclusion // "pending"')"
+          if [ "$conclusion" != success ]; then
+            echo "Main checks for $sha are $conclusion; waiting for the next run." >> "$GITHUB_STEP_SUMMARY"
+            echo 'build=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          build=true
+          reuse=false
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets > "$RUNNER_TEMP/existing-release.json" 2>/dev/null; then
+            if [ "$publish" = false ] || jq -e 'any(.assets[]; .name == "play-internal.json")' "$RUNNER_TEMP/existing-release.json" >/dev/null; then
+              build=false
+              echo "Source $sha is already processed." >> "$GITHUB_STEP_SUMMARY"
+            elif jq -e 'any(.assets[]; .name == "upload-ready.json")' "$RUNNER_TEMP/existing-release.json" >/dev/null; then
+              reuse=true
+            fi
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
+      - name: Require Play upload configuration
+        if: steps.source.outputs.build == 'true' && steps.source.outputs.publish == 'true'
+        env:
+          PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          PLAY_UPLOAD_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          PLAY_UPLOAD_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          PLAY_UPLOAD_CERT_SHA256: ${{ vars.PLAY_UPLOAD_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          for name in PLAY_UPLOAD_KEYSTORE_BASE64 PLAY_UPLOAD_STORE_PASSWORD PLAY_UPLOAD_KEY_ALIAS PLAY_UPLOAD_KEY_PASSWORD PLAY_SERVICE_ACCOUNT_JSON PLAY_UPLOAD_CERT_SHA256; do
+            test -n "${!name}" || { echo "::error::Missing $name; see docs/google-play-releases.md"; exit 1; }
+          done
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        if: steps.source.outputs.build == 'true'
+        with:
+          repository: cbulock/sinkpoint
+          ref: ${{ steps.source.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        if: steps.source.outputs.build == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        if: steps.source.outputs.build == 'true'
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android SDK
+        if: steps.source.outputs.build == 'true'
+        run: sdkmanager 'platforms;android-36.1' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+        if: steps.source.outputs.build == 'true'
+      - name: Test, lint, and build release bundle
+        if: steps.source.outputs.build == 'true' && steps.source.outputs.reuse != 'true'
+        run: |
+          python3 -m unittest discover -s scripts -p test_publish_play.py
+          bash ./gradlew --no-daemon testDebugUnitTest lintRelease bundleRelease
+          mkdir -p dist
+          bash ./gradlew --no-daemon -q :app:printAppVersion | grep -E '^version(Name|Code)=' > dist/version.txt
+          test "$(wc -l < dist/version.txt)" -eq 2
+          cp app/build/outputs/mapping/release/mapping.txt dist/mapping.txt
+          cp app/build/outputs/bundle/release/app-release.aab dist/sinkpoint-release.aab
+      - name: Restore exact signed bundle for upload retry
+        if: steps.source.outputs.build == 'true' && steps.source.outputs.reuse == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir dist \
+            -p sinkpoint-release.aab -p sinkpoint-release.aab.sha256 -p mapping.txt -p version.txt -p upload-ready.json
+          (cd dist && sha256sum --check sinkpoint-release.aab.sha256)
+          jq -e --arg sha "$SOURCE_SHA" '.sourceSha == $sha' dist/upload-ready.json >/dev/null
+      - name: Sign and verify Play upload bundle
+        if: steps.source.outputs.build == 'true' && steps.source.outputs.publish == 'true' && steps.source.outputs.reuse != 'true'
+        env:
+          PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          PLAY_UPLOAD_STORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          PLAY_UPLOAD_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
+          PLAY_UPLOAD_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+          PLAY_UPLOAD_CERT_SHA256: ${{ vars.PLAY_UPLOAD_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/play-upload.jks"
+          trap 'rm -f "$keystore"' EXIT
+          umask 077
+          printf '%s' "$PLAY_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          expected="$(printf '%s' "$PLAY_UPLOAD_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo 'Invalid upload certificate SHA-256'; exit 1; }
+          actual="$(keytool -exportcert -keystore "$keystore" -alias "$PLAY_UPLOAD_KEY_ALIAS" -storepass:env PLAY_UPLOAD_STORE_PASSWORD | sha256sum | cut -d ' ' -f 1)"
+          test "$actual" = "$expected" || { echo 'Keystore does not match registered upload certificate'; exit 1; }
+          jarsigner -keystore "$keystore" -storepass:env PLAY_UPLOAD_STORE_PASSWORD -keypass:env PLAY_UPLOAD_KEY_PASSWORD \
+            -digestalg SHA-256 -sigalg SHA256withRSA dist/sinkpoint-release.aab "$PLAY_UPLOAD_KEY_ALIAS"
+      - name: Verify signed bundle before storage or upload
+        if: steps.source.outputs.build == 'true' && steps.source.outputs.publish == 'true'
+        env:
+          PLAY_UPLOAD_CERT_SHA256: ${{ vars.PLAY_UPLOAD_CERT_SHA256 }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          expected="$(printf '%s' "$PLAY_UPLOAD_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          jarsigner -verify dist/sinkpoint-release.aab | tee "$RUNNER_TEMP/signature-verification.txt"
+          grep -q 'jar verified.' "$RUNNER_TEMP/signature-verification.txt"
+          signed="$(keytool -printcert -rfc -jarfile dist/sinkpoint-release.aab | openssl x509 -outform der | sha256sum | cut -d ' ' -f 1)"
+          test "$signed" = "$expected" || { echo 'Signed bundle certificate mismatch'; exit 1; }
+          jq -n --arg sha "$SOURCE_SHA" --arg cert "$expected" '{sourceSha:$sha, certificateSha256:$cert}' > dist/upload-ready.json
+      - name: Store bundle and mapping in private release
+        if: steps.source.outputs.build == 'true' && steps.source.outputs.reuse != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+          PLAY_PUBLISH: ${{ steps.source.outputs.publish }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)" = true
+          (cd dist && sha256sum sinkpoint-release.aab > sinkpoint-release.aab.sha256)
+          printf 'Release AAB from cbulock/sinkpoint commit %s. Play upload signing enabled: %s. See the play-internal.json asset for confirmed internal publication.\n' "$SOURCE_SHA" "$PLAY_PUBLISH" > "$RUNNER_TEMP/aab-notes.md"
+          # Publish the readiness marker only after every payload asset is saved.
+          # gh uploads assets concurrently; a partial failure must not mark an
+          # incomplete archive as reusable on the next run.
+          assets=(dist/sinkpoint-release.aab dist/sinkpoint-release.aab.sha256 dist/mapping.txt dist/version.txt)
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/aab-notes.md"
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --target main --title "Sinkpoint AAB ${SOURCE_SHA:0:7}" --notes-file "$RUNNER_TEMP/aab-notes.md" --latest
+          fi
+          if [ "$PLAY_PUBLISH" = true ]; then
+            gh release upload "$RELEASE_TAG" dist/upload-ready.json --repo "$GITHUB_REPOSITORY" --clobber
+          fi
+      - name: Install Google authentication dependencies
+        if: steps.source.outputs.build == 'true' && steps.source.outputs.publish == 'true'
+        run: python3 -m pip install --requirement scripts/play-requirements.txt
+      - name: Publish to Google Play internal testing
+        if: steps.source.outputs.build == 'true' && steps.source.outputs.publish == 'true'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          code="$(sed -n 's/^versionCode=//p' dist/version.txt)"
+          name="$(sed -n 's/^versionName=//p' dist/version.txt)"
+          python3 scripts/publish_play.py --bundle dist/sinkpoint-release.aab --mapping dist/mapping.txt \
+            --version-code "$code" --version-name "$name" --source-sha "$SOURCE_SHA"
+      - name: Record confirmed internal publication
+        if: steps.source.outputs.build == 'true' && steps.source.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)" = true
+          jq -n --arg sha "$SOURCE_SHA" --arg time "$(date -u +%FT%TZ)" \
+            '{sourceSha:$sha, track:"internal", publishedAt:$time}' > "$RUNNER_TEMP/play-internal.json"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/play-internal.json" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "Published $SOURCE_SHA to Google Play internal testing. Production promotion remains in Play Console." >> "$GITHUB_STEP_SUMMARY"

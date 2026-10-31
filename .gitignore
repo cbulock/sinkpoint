@@ -11,3 +11,6 @@ captures/
 *-check.log
 .codex-remote-attachments/
 .rollout/
+.tools/
+__pycache__/
+play-service-account*.json
