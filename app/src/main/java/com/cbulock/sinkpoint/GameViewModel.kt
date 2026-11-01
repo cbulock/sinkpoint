@@ -10,6 +10,7 @@ import com.cbulock.sinkpoint.nearby.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -47,6 +48,7 @@ data class UiState(
     val resultVisible: Boolean = false,
     val storageBlocked: Boolean = false,
     val opponentFleet: Fleet? = null,
+    val battle: BattlePresentation? = null,
 )
 
 class GameViewModel @JvmOverloads constructor(
@@ -58,6 +60,11 @@ class GameViewModel @JvmOverloads constructor(
     private var saved: AppData? = null
     private val mutable = MutableStateFlow(UiState())
     val ui = mutable.asStateFlow()
+    private val presentation = BattlePresentationController(viewModelScope) { completed ->
+        mutable.update { it.copy(battle = presentationState()) }
+        if (completed) showFreshResult()
+    }
+    private fun presentationState(): BattlePresentation? = presentation.state
     private var aiJob: Job? = null
     private var setupJob: Job? = null
     private var setupGeneration = 0
@@ -93,6 +100,7 @@ class GameViewModel @JvmOverloads constructor(
                         transport.close(); mutable.update { it.copy(connected = false, synchronized = false, searching = false, pairing = null) }
                         if (!mutable.value.storageBlocked) fail(connectionError(e), e)
                     }
+                    finally { refreshPresentation() }
                 }
             }
         }
@@ -108,9 +116,16 @@ class GameViewModel @JvmOverloads constructor(
             difficulty = data.solo?.difficulty ?: it.difficulty,
             solo = data.solo?.match?.let(::summary), nearby = data.nearby?.match?.let(::summary),
             records = data.records, totals = data.totals, exchangePending = it.mode == Mode.NEARBY && data.nearby?.blocked == true) }
+        refreshPresentation()
+    }
+    private fun refreshPresentation() {
+        val ui = mutable.value
+        presentation.update(ui.match, foreground && ui.screen == Screen.GAME && !ui.storageBlocked &&
+            (ui.mode == Mode.AI || ui.connected && ui.synchronized))
     }
     private fun fail(resource: Int, error: Exception? = null, storage: Boolean = false) {
         mutable.update { it.copy(error = resource, errorDetail = error?.message.orEmpty(), busy = false, storageBlocked = it.storageBlocked || storage) }
+        refreshPresentation()
     }
     private suspend fun write(transform: (AppData) -> AppData) {
         try {
@@ -236,6 +251,8 @@ class GameViewModel @JvmOverloads constructor(
     }
     fun fire(targets: List<Int>) = command {
         val match = requireNotNull(mutable.value.match)
+        if (!foreground || mutable.value.screen != Screen.GAME || mutable.value.busy ||
+            presentation.state?.canFire != true || mutable.value.exchangePending) return@command
         if (mutable.value.mode == Mode.AI) {
             val solo = requireNotNull(saved?.solo)
             match.checkTargets(match.localId, targets)
@@ -255,11 +272,18 @@ class GameViewModel @JvmOverloads constructor(
                 val turn = saved?.solo ?: break
                 if (!foreground || mutable.value.screen != Screen.GAME || mutable.value.mode != Mode.AI ||
                     mutable.value.storageBlocked || turn.match.phase != Phase.PLAYING || turn.match.current == turn.match.localId) break
-                delay(650)
+                // The previous shot must finish displaying before the CPU begins its next decision.
+                ui.first { it.match != turn.match || it.battle?.stage != BattleStage.RESULT }
+                if (saved?.solo != turn) continue
                 val random = GameRandom(turn.randomState)
-                val targets = withContext(Dispatchers.Default) { FleetAi.strategy(turn.difficulty).targets(turn.match.incoming, turn.match.quota(), random) }
+                val targets = coroutineScope {
+                    val calculation = async(Dispatchers.Default) { FleetAi.strategy(turn.difficulty).targets(turn.match.incoming, turn.match.quota(), random) }
+                    delay(BattleTiming.CPU_THINK_MILLIS)
+                    calculation.await()
+                }
                 val applied = mutex.withLock {
-                    if (saved?.solo != turn || !foreground || mutable.value.screen != Screen.GAME) return@withLock false
+                    if (saved?.solo != turn || !foreground || mutable.value.screen != Screen.GAME ||
+                        mutable.value.mode != Mode.AI || mutable.value.storageBlocked) return@withLock false
                     try {
                         val move = Move("ai-${turn.match.id}-${turn.match.moves.size}", turn.match.moves.size, turn.match.peerId, targets, Rules.resolve(turn.match.config, turn.match.own, turn.match.incoming.tried, targets))
                         write { it.copy(solo = turn.copy(match = turn.match.append(move), randomState = random.state)) }
@@ -274,11 +298,15 @@ class GameViewModel @JvmOverloads constructor(
     }
     private fun showFreshResult() {
         val m = mutable.value.match ?: return
-        if (m.phase == Phase.FINISHED && !mutable.value.exchangePending && lastFinishedShown != m.id && mutable.value.screen == Screen.GAME) {
+        if (m.phase == Phase.FINISHED && presentation.state?.stage != BattleStage.RESULT &&
+            !mutable.value.storageBlocked && !mutable.value.exchangePending && lastFinishedShown != m.id && mutable.value.screen == Screen.GAME) {
             lastFinishedShown = m.id; mutable.update { it.copy(resultVisible = true) }
         }
     }
-    fun showResult(show: Boolean) { mutable.update { it.copy(resultVisible = show) } }
+    fun showResult(show: Boolean) {
+        if (show && presentation.state?.stage == BattleStage.RESULT) return
+        mutable.update { it.copy(resultVisible = show) }
+    }
     fun resign() = command {
         val m = requireNotNull(mutable.value.match)
         require(m.phase == Phase.PLAYING)
@@ -465,11 +493,14 @@ class GameViewModel @JvmOverloads constructor(
             // Connection closure is itself the durable pause signal; no forfeit is inferred.
             transport.close()
             mutable.update { it.copy(connected = false, synchronized = false, searching = false, pairing = null, offer = null) }
+            refreshPresentation()
         }
     }
     fun foreground(active: Boolean) {
         foreground = active
-        if (!active) { aiJob?.cancel(); pauseNearby() } else scheduleAi()
+        if (!active) { aiJob?.cancel(); pauseNearby() }
+        refreshPresentation()
+        if (active) scheduleAi()
     }
     fun export(uri: Uri) = command {
         val text = SaveFormat.encode(requireNotNull(saved))

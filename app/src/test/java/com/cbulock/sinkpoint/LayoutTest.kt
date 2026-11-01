@@ -74,7 +74,9 @@ class LayoutTest {
         compose.onNodeWithText("Import backup").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { state.value = state.value.copy(screen = Screen.GAME, match = m.copy(resigned = "ai"), resultVisible = true) }
         capture("result")
-        compose.onNodeWithText("View board").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("View board").assertIsDisplayed()
+        compose.onNodeWithText("Accuracy").performScrollTo()
+        compose.onNodeWithText("View board").assertIsDisplayed()
         compose.onAllNodesWithText("Main menu").onLast().assertIsDisplayed()
     }
     @Test @Config(qualifiers = "w360dp-h640dp-xhdpi") fun phoneLight() = render("phone-light")

@@ -52,6 +52,96 @@ class GameplayFeedbackTest {
 
     @Test fun phoneSelectionDoesNotMoveBoardOrFireButton() = checkSelectionDoesNotMoveBoard()
 
+    @Test fun phoneStartsOnOwnFleetWhileOpponentDecides() {
+        val vm = model()
+        compose.setContent { SinkpointTheme(ThemeMode.LIGHT) {
+            GameScreen(UiState(loaded = true, mode = Mode.AI, match = match.copy(moves = emptyList())), vm, {}, {})
+        } }
+        compose.onNodeWithTag("own-play-board").assertIsDisplayed()
+        compose.onNodeWithText("Thinking…").assertIsDisplayed()
+        compose.onNodeWithText("Back to targeting").performClick()
+        compose.onNodeWithTag("target-play-board").assertIsDisplayed()
+    }
+
+    @Test fun phoneFollowsResultsAndKeepsManualBrowsingBetweenFocusEvents() = checkFollowedResults()
+
+    @Test @Config(qualifiers = "w1000dp-h800dp-xhdpi")
+    fun tabletKeepsBothBoardsVisibleDuringIncomingResultHold() {
+        val vm = model()
+        val state = mutableStateOf(UiState(loaded = true, mode = Mode.AI, match = match,
+            battle = BattlePresentation(match, BattleStage.RESULT, true, 1)))
+        compose.setContent { SinkpointTheme(ThemeMode.LIGHT) { GameScreen(state.value, vm, {}, {}) } }
+        val target = compose.onNodeWithTag("target-play-board").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val own = compose.onNodeWithTag("own-play-board").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Opponent’s shot").assertIsDisplayed()
+        compose.onNodeWithText("Your turn").assertDoesNotExist()
+        compose.onNodeWithText("Fire").assertIsNotEnabled()
+        capture("tablet-incoming-result")
+        compose.runOnIdle { state.value = state.value.copy(battle = BattlePresentation(match, focusRevision = 2)) }
+        compose.onNodeWithText("Your turn").assertIsDisplayed()
+        assertEquals(target, compose.onNodeWithTag("target-play-board").fetchSemanticsNode().boundsInRoot)
+        assertEquals(own, compose.onNodeWithTag("own-play-board").fetchSemanticsNode().boundsInRoot)
+    }
+
+    @Test @Config(qualifiers = "w360dp-h640dp-xhdpi")
+    fun phoneBoardDoesNotResizeWhenTurnFocusChanges() {
+        val vm = model()
+        val outgoing = match.copy(moves = match.moves + Move("out", 1, "you", listOf(8, 9), Outcome(emptyList(), emptyList())))
+        val state = mutableStateOf(UiState(loaded = true, mode = Mode.AI, match = outgoing,
+            battle = BattlePresentation(outgoing, BattleStage.RESULT, false, 1)))
+        compose.setContent { SinkpointTheme(ThemeMode.LIGHT) { GameScreen(state.value, vm, {}, {}) } }
+        val bounds = compose.onNodeWithTag("target-play-board").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle { state.value = state.value.copy(battle = BattlePresentation(outgoing, ownBoard = true, focusRevision = 2)) }
+        assertEquals(bounds, compose.onNodeWithTag("own-play-board").fetchSemanticsNode().boundsInRoot)
+    }
+
+    @Test fun largeTextPhoneFollowsResults() = checkFollowedResults(1.5f)
+
+    private fun checkFollowedResults(fontScale: Float = 1f) {
+        val vm = model()
+        val start = match.copy(config = GameConfig(6, listOf(2, 2)), first = "you", moves = emptyList())
+        val state = mutableStateOf(UiState(loaded = true, mode = Mode.AI, match = start, battle = BattlePresentation(start)))
+        compose.setContent {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides
+                androidx.compose.ui.unit.Density(density.density, fontScale)) {
+                SinkpointTheme(ThemeMode.LIGHT) { GameScreen(state.value, vm, {}, {}) }
+            }
+        }
+        compose.onNodeWithText("Own fleet").performClick()
+        compose.runOnIdle { state.value = state.value.copy(busy = true) }
+        compose.onNodeWithTag("own-play-board").assertIsDisplayed()
+        val outgoing = start.copy(moves = listOf(Move("out", 0, "you", listOf(8), Outcome(emptyList(), emptyList()))))
+        compose.runOnIdle { state.value = state.value.copy(busy = false, match = outgoing,
+            battle = BattlePresentation(outgoing, BattleStage.RESULT, false, 1)) }
+        compose.onNodeWithTag("target-play-board").assertIsDisplayed()
+        compose.onNodeWithText("Your shot").assertIsDisplayed()
+        compose.onNodeWithText("Fire").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("B3, miss").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Your latest move"))
+        capture("phone-outgoing-result")
+        compose.runOnIdle { state.value = state.value.copy(battle = BattlePresentation(outgoing, ownBoard = true, focusRevision = 2)) }
+        compose.onNodeWithTag("own-play-board").assertIsDisplayed()
+        val incoming = outgoing.copy(moves = outgoing.moves + Move("in", 1, "ai", listOf(20), Outcome(emptyList(), emptyList())))
+        compose.runOnIdle { state.value = state.value.copy(match = incoming,
+            battle = BattlePresentation(incoming, BattleStage.RESULT, true, 3)) }
+        compose.onNodeWithText("Opponent’s shot").assertIsDisplayed()
+        compose.onNodeWithText("Your turn").assertDoesNotExist()
+        compose.onNodeWithContentDescription("D3, miss").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Latest opponent move"))
+        capture("phone-incoming-result")
+        compose.onNodeWithText("Back to targeting").performClick()
+        compose.onNodeWithText("Fire").assertIsNotEnabled()
+        compose.runOnIdle { state.value = state.value.copy(busy = true) }
+        compose.onNodeWithTag("target-play-board").assertIsDisplayed()
+        compose.runOnIdle { state.value = state.value.copy(busy = false,
+            battle = BattlePresentation(incoming, focusRevision = 4)) }
+        compose.onNodeWithTag("target-play-board").assertIsDisplayed()
+        compose.onNodeWithText("Your turn").assertIsDisplayed()
+        compose.onNodeWithContentDescription("B4, untried").performClick()
+        compose.onNodeWithText("Fire").assertIsEnabled()
+    }
+
     @Test @Config(qualifiers = "w360dp-h640dp-xhdpi")
     fun targetViewKeepsOpponentProgressVisibleAndUpdatesDamage() {
         val vm = model()
@@ -101,7 +191,7 @@ class GameplayFeedbackTest {
         compose.onNodeWithText("Saving and confirming the move…").assertIsDisplayed()
         compose.runOnIdle { state.value = state.value.copy(exchangePending = false, match = match.copy(moves = match.moves + Move("outgoing", 1, "you", listOf(4, 5), Outcome(emptyList(), emptyList())))) }
         compose.onNodeWithText("Thinking…").assertIsDisplayed()
-        compose.onNodeWithText("Fire").assertIsNotEnabled()
+        compose.onNodeWithTag("own-play-board").assertIsDisplayed()
         compose.runOnIdle { state.value = state.value.copy(storageBlocked = true) }
         compose.onNodeWithText("Match paused").assertIsDisplayed()
         compose.onNodeWithText("Your turn").assertDoesNotExist()
@@ -125,6 +215,7 @@ class GameplayFeedbackTest {
             state.value = state.value.copy(match = current.copy(moves = current.moves + Move("next", 2, "ai", listOf(12, 20), Outcome(listOf(12), emptyList()))))
         }
         compose.onNodeWithText("C1 hit · D3 miss").assertExists()
+        compose.onNodeWithContentDescription("Show on own fleet").performClick()
         compose.onNodeWithContentDescription("A1, hit").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.StateDescription))
         compose.onNodeWithContentDescription("C1, hit").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Latest opponent move"))
     }
@@ -151,17 +242,47 @@ class GameplayFeedbackTest {
         val shot = Move("shot", 1, "you", listOf(6, 8), Outcome(listOf(6), emptyList()))
         val played = match.copy(moves = match.moves + shot)
         val state = mutableStateOf(UiState(loaded = true, mode = Mode.AI, match = played, opponentFleet = fleet))
-        compose.setContent { SinkpointTheme(ThemeMode.LIGHT) { GameScreen(state.value, vm, {}, {}) } }
+        compose.setContent { SinkpointTheme(state.value.preferences.theme) {
+            androidx.compose.material3.Surface { GameScreen(state.value, vm, {}, {}) }
+        } }
+        compose.onNodeWithText("Target grid").performClick()
+        compose.onNodeWithText("Remaining ships").assertDoesNotExist()
         compose.onNodeWithContentDescription("B2, untried").assertExists()
         compose.onNodeWithContentDescription("B2, opponent ship").assertDoesNotExist()
         compose.runOnIdle { state.value = state.value.copy(match = played.copy(resigned = "you")) }
+        compose.onNodeWithText("Target grid").performClick()
         compose.onNodeWithContentDescription("B1, hit").assertExists()
         compose.onNodeWithContentDescription("B3, miss").assertExists()
         compose.onNodeWithContentDescription("B2, opponent ship").assertExists().assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsActions.OnClick))
         compose.onNodeWithContentDescription("D1, opponent ship").assertExists()
         compose.onNodeWithContentDescription("Opponent fleet, ship 1, length 2").assertExists()
+        compose.onNodeWithText("Remaining ships").assertIsDisplayed()
+        val afloat = SemanticsMatcher("Ship still afloat") {
+            val key = androidx.compose.ui.semantics.SemanticsProperties.StateDescription
+            key in it.config && it.config[key].contains("Ship still afloat")
+        }
+        compose.onNodeWithContentDescription("B1, hit").assert(afloat)
+        compose.onNodeWithContentDescription("B2, opponent ship").assert(afloat)
         compose.onNodeWithText("Fire").assertDoesNotExist()
         capture("finished-opponent-reveal")
+        compose.runOnIdle { state.value = state.value.copy(preferences = state.value.preferences.copy(theme = ThemeMode.DARK)) }
+        capture("finished-opponent-reveal-dark")
+        compose.runOnIdle {
+            val current = state.value.match!!
+            state.value = state.value.copy(match = current.copy(moves = current.moves +
+                Move("sink", 2, "you", listOf(7), Outcome(listOf(7), listOf(SunkPiece(0, listOf(6, 7)))))))
+        }
+        compose.onNodeWithText("Target grid").performClick()
+        compose.onNodeWithContentDescription("B1, destroyed piece").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsProperties.StateDescription))
+        compose.onNodeWithContentDescription("D1, opponent ship").assert(afloat)
+        capture("finished-sunk-and-remaining-dark")
+        compose.runOnIdle {
+            val current = state.value.match!!
+            state.value = state.value.copy(match = current.copy(moves = current.moves +
+                Move("sink-last", 3, "you", listOf(18, 19), Outcome(listOf(18, 19), listOf(SunkPiece(1, listOf(18, 19)))))))
+        }
+        compose.onNodeWithText("Target grid").performClick()
+        compose.onNodeWithText("Remaining ships").assertDoesNotExist()
     }
 
     private fun capture(name: String) {

@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
@@ -70,6 +71,7 @@ data class BoardTransform(val side: Float, val margin: Float, val zoom: Float, v
     showFleetStatus: Boolean = false,
     showZoomControls: Boolean = true,
     opponent: Boolean = fleet == null,
+    highlightRemainingShips: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
     val density = LocalDensity.current
@@ -84,6 +86,7 @@ data class BoardTransform(val side: Float, val margin: Float, val zoom: Float, v
     val ownCells = remember(config, fleet) { fleet?.pieces?.flatMap { Rules.cells(config, it) }?.toSet().orEmpty() }
     val previewCells = remember(config, preview) { preview?.let { Rules.cells(config, it).toSet() }.orEmpty() }
     val sunkCells = knowledge.sunk.flatMap { it.cells }.toSet()
+    val remainingCells = if (highlightRemainingShips) ownCells - sunkCells else emptySet()
     val labelUnknown = stringResource(R.string.unknown_cell)
     val labelPiece = stringResource(if (opponent) R.string.opponent_piece_cell else R.string.piece_cell)
     val labelMiss = stringResource(R.string.miss_cell)
@@ -92,7 +95,8 @@ data class BoardTransform(val side: Float, val margin: Float, val zoom: Float, v
     val labelSelected = stringResource(if (placement) R.string.selected_piece_cell else R.string.selected_cell)
     val labelPreview = stringResource(R.string.preview_cell)
     val selectLabel = stringResource(R.string.select_cell)
-    val latestLabel = stringResource(R.string.latest_move_cell)
+    val latestLabel = stringResource(if (opponent) R.string.latest_shot_cell else R.string.latest_move_cell)
+    val remainingLabel = stringResource(R.string.remaining_ship_cell)
     val flicker = if (knowledge.hits.isNotEmpty()) {
         val transition = rememberInfiniteTransition(label = "fire")
         val value by transition.animateFloat(.92f, 1.08f,
@@ -150,12 +154,16 @@ data class BoardTransform(val side: Float, val margin: Float, val zoom: Float, v
                     val fill = when {
                         placement && index in previewCells -> if (previewValid) colors.secondaryContainer else colors.errorContainer
                         placement && index in selected -> colors.secondaryContainer
+                        index in remainingCells -> colors.secondaryContainer
                         own -> colors.primaryContainer
                         index in selected -> colors.primaryContainer
                         tried -> colors.surface.copy(alpha = .65f)
                         else -> colors.surfaceContainer
                     }
                     drawRoundRect(fill, origin, tile, CornerRadius(t.cell * .15f))
+                    if (index in remainingCells && index !in knowledge.hits) {
+                        drawRemainingShipPattern(origin, tile, colors.secondary.copy(alpha = .28f))
+                    }
                     val center = origin + Offset(tile.width / 2, tile.height / 2)
                     if (index in knowledge.hits) {
                         drawFlame(center, t.cell * .66f, flicker)
@@ -173,16 +181,21 @@ data class BoardTransform(val side: Float, val margin: Float, val zoom: Float, v
                 fleet?.pieces?.forEach { p ->
                     val cells = Rules.cells(config, p)
                     if (cells.isEmpty()) return@forEach
+                    val remaining = cells.first() in remainingCells
+                    val linkColor = if (remaining) colors.secondaryContainer else colors.primaryContainer
                     cells.zipWithNext().forEach { (a, b) ->
                         val ac = t.origin(a) + Offset(t.cell / 2, t.cell / 2)
                         val bc = t.origin(b) + Offset(t.cell / 2, t.cell / 2)
                         val mid = (ac + bc) / 2f
-                        if (p.horizontal) drawLine(colors.primaryContainer, mid - Offset(gap * 2, 0f), mid + Offset(gap * 2, 0f), t.cell * .45f)
-                        else drawLine(colors.primaryContainer, mid - Offset(0f, gap * 2), mid + Offset(0f, gap * 2), t.cell * .45f)
+                        if (p.horizontal) drawLine(linkColor, mid - Offset(gap * 2, 0f), mid + Offset(gap * 2, 0f), t.cell * .45f)
+                        else drawLine(linkColor, mid - Offset(0f, gap * 2), mid + Offset(0f, gap * 2), t.cell * .45f)
                     }
                     val origin = t.origin(cells.first()) + Offset(gap, gap)
                     val last = t.origin(cells.last()) + Offset(t.cell - gap, t.cell - gap)
-                    drawRoundRect(colors.primary, origin, Size(last.x - origin.x, last.y - origin.y), CornerRadius(t.cell * .15f), style = Stroke(1.5.dp.toPx()))
+                    drawRoundRect(if (remaining) colors.secondary else colors.primary,
+                        origin, Size(last.x - origin.x, last.y - origin.y), CornerRadius(t.cell * .15f),
+                        style = if (remaining) Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(t.cell * .16f, t.cell * .10f)))
+                            else Stroke(1.5.dp.toPx()))
                 }
                 // Draw this after fleet outlines so the latest volley remains prominent.
                 latestMove.forEach { index ->
@@ -223,11 +236,24 @@ data class BoardTransform(val side: Float, val margin: Float, val zoom: Float, v
                     .size(with(density) { (right - left).toDp() }, with(density) { (bottom - top).toDp() })
                     .semantics {
                         contentDescription = label
-                        if (index in latestMove) stateDescription = latestLabel
+                        val details = listOfNotNull(remainingLabel.takeIf { index in remainingCells }, latestLabel.takeIf { index in latestMove })
+                        if (details.isNotEmpty()) stateDescription = details.joinToString(", ")
                         if (index in selected) this.selected = true
                         if (enabled) onClick(selectLabel) { onSelect(index); true }
                     })
             }
+        }
+        if (remainingCells.isNotEmpty()) Row(Modifier.padding(horizontal = 8.dp).heightIn(min = 24.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Canvas(Modifier.size(28.dp, 18.dp)) {
+                val origin = Offset(2.dp.toPx(), 2.dp.toPx())
+                val tile = Size(size.width - origin.x * 2, size.height - origin.y * 2)
+                drawRoundRect(colors.secondaryContainer, origin, tile, CornerRadius(3.dp.toPx()))
+                drawRemainingShipPattern(origin, tile, colors.secondary.copy(alpha = .28f))
+                drawRoundRect(colors.secondary, origin, tile, CornerRadius(3.dp.toPx()),
+                    style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
+            }
+            Text(stringResource(R.string.remaining_ships_legend), style = MaterialTheme.typography.labelMedium)
         }
         if (showFleetStatus) FleetStatus(config, knowledge, fleet, opponent)
         if (!placement) Column {
@@ -246,6 +272,16 @@ data class BoardTransform(val side: Float, val margin: Float, val zoom: Float, v
                 Text(stringResource(R.string.misses_legend), style = MaterialTheme.typography.labelMedium)
             }
         }
+    }
+}
+
+/** Texture and a dashed hull distinguish survivors even without color. */
+private fun DrawScope.drawRemainingShipPattern(origin: Offset, tile: Size, color: Color) {
+    repeat(3) { stripe ->
+        val x = .12f + stripe * .20f
+        drawLine(color, origin + Offset(tile.width * x, tile.height * .80f),
+            origin + Offset(tile.width * (x + .36f), tile.height * .20f),
+            tile.minDimension * .035f, StrokeCap.Round)
     }
 }
 

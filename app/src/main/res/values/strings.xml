@@ -211,6 +211,11 @@
     <string name="hits_legend">Hit</string>
     <string name="misses_legend">Miss</string>
     <string name="latest_move_cell">Latest opponent move</string>
+    <string name="latest_shot_cell">Your latest move</string>
+    <string name="your_shot_result">Your shot</string>
+    <string name="opponent_shot_result">Opponent’s shot</string>
+    <string name="remaining_ship_cell">Ship still afloat</string>
+    <string name="remaining_ships_legend">Remaining ships</string>
     <string name="latest_opponent_move">Opponent’s latest move</string>
     <string name="show_latest_move">Show on own fleet</string>
     <string name="victory_celebration">Victory trophy and confetti</string>

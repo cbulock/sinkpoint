@@ -23,20 +23,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cbulock.sinkpoint.GameViewModel
+import com.cbulock.sinkpoint.BattleStage
 import com.cbulock.sinkpoint.Mode
 import com.cbulock.sinkpoint.R
 import com.cbulock.sinkpoint.UiState
 import com.cbulock.sinkpoint.game.*
 
 @Composable fun GameScreen(ui: UiState, model: GameViewModel, onResign: () -> Unit, onReconnect: () -> Unit) {
-    val match = ui.match ?: return
+    val match = ui.battle?.match ?: ui.match ?: return
     if (match.phase == Phase.PLACEMENT) { PlacementScreen(ui, model, onReconnect); return }
     var chosen by rememberSaveable(match.id, match.moves.size, ui.connected) { mutableStateOf(emptyList<Int>()) }
-    var ownBoard by rememberSaveable(match.id) { mutableStateOf(false) }
+    var ownBoard by rememberSaveable(match.id, ui.battle?.focusRevision ?: match.moves.size.toLong(),
+        if (ui.battle == null) match.current else null) {
+        mutableStateOf(ui.battle?.ownBoard ?: (match.current != match.localId))
+    }
+    val showingResult = ui.battle?.stage == BattleStage.RESULT
     val haptics = LocalHapticFeedback.current
     val available = !ui.storageBlocked && !ui.busy
     val linked = ui.mode == Mode.AI || ui.connected && ui.synchronized
-    val canFire = available && linked && !ui.exchangePending && match.phase == Phase.PLAYING && match.current == match.localId
+    val canFire = available && linked && !ui.exchangePending && !showingResult && match.phase == Phase.PLAYING && match.current == match.localId
     // Track turn ownership separately from availability so saving/reconnecting cannot repeat the cue.
     var previousPlayer by rememberSaveable(match.id) { mutableStateOf(match.current) }
     var turnFeedbackPending by rememberSaveable(match.id) { mutableStateOf(false) }
@@ -55,8 +60,10 @@ import com.cbulock.sinkpoint.game.*
         previousPlayer = match.current
     }
     val status = stringResource(when {
-        match.phase == Phase.FINISHED -> outcomeTitle(match)
         !linked || ui.storageBlocked -> R.string.paused
+        showingResult && match.moves.lastOrNull()?.attacker == match.localId -> R.string.your_shot_result
+        showingResult -> R.string.opponent_shot_result
+        match.phase == Phase.FINISHED -> outcomeTitle(match)
         ui.exchangePending || ui.busy -> R.string.syncing
         match.current == match.localId -> R.string.your_turn
         ui.mode == Mode.AI -> R.string.thinking
@@ -98,7 +105,7 @@ import com.cbulock.sinkpoint.game.*
             }
         }
         val actions: @Composable (Boolean) -> Unit = { stacked ->
-            if (match.phase == Phase.PLAYING) FirePanel(chosen, match, canFire, stacked, fire, if (!wide) status else null)
+            if (match.phase == Phase.PLAYING || showingResult) FirePanel(chosen, match, canFire, stacked, fire, if (!wide) status else null)
             else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { model.showResult(true) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.view_result)) }
                 if (ui.mode == Mode.NEARBY) {
@@ -145,7 +152,7 @@ import com.cbulock.sinkpoint.game.*
                 }
             }
         } else Column(Modifier.fillMaxSize().padding(horizontal = if (wide) 12.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (wide || match.phase == Phase.FINISHED) header()
+            if (wide || match.phase == Phase.FINISHED && !showingResult) header()
             // Kept outside board scrolling so the opponent's progress is visible on the target tab.
             if (!wide) OpponentProgress(match, onShow = { ownBoard = true })
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -175,7 +182,7 @@ import com.cbulock.sinkpoint.game.*
                 Box(Modifier.weight(1f)) { OpponentProgress(match) }
                 Box(Modifier.weight(1f)) { actions(false) }
             }
-            else if (ownBoard && !wide && match.phase == Phase.PLAYING) {
+            else if (ownBoard && !wide && (match.phase == Phase.PLAYING || showingResult)) {
                 Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.labelLarge)
                 Button(onClick = { ownBoard = false }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text(stringResource(R.string.return_to_target)) }
             } else {
@@ -198,7 +205,8 @@ import com.cbulock.sinkpoint.game.*
         FleetBoard(match.id + if (own) "own" else "target", match.config, fleet = if (own) match.own else opponentFleet.takeIf { match.phase == Phase.FINISHED },
             knowledge = knowledge, selected = if (own || match.phase == Phase.FINISHED) emptySet() else chosen.toSet(), enabled = !own && canFire, onSelect = select,
             modifier = Modifier.widthIn(max = boardLimit).fillMaxWidth(), boardModifier = Modifier.testTag(if (own) "own-play-board" else "target-play-board"),
-            latestMove = if (own) match.incoming.moves.lastOrNull()?.targets?.toSet().orEmpty() else emptySet(), showFleetStatus = true, showZoomControls = false, opponent = !own)
+            latestMove = knowledge.moves.lastOrNull()?.targets?.toSet().orEmpty(), showFleetStatus = true, showZoomControls = false, opponent = !own,
+            highlightRemainingShips = match.phase == Phase.FINISHED)
     }
 }
 

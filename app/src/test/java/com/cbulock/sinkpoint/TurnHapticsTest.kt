@@ -8,6 +8,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import com.cbulock.sinkpoint.data.ThemeMode
 import com.cbulock.sinkpoint.game.*
@@ -114,5 +115,23 @@ class TurnHapticsTest {
         update { it.copy(busy = true) }
         update { it.copy(busy = false) }
         expectPulses(0)
+    }
+
+    @Test fun incomingResultDelaysTurnAnnouncementAndHapticUntilTargetingIsAvailable() {
+        show()
+        update { ui ->
+            val match = ui.match!!
+            val moved = match.copy(moves = listOf(Move("incoming", 0, "peer", listOf(8), Outcome(emptyList(), emptyList()))))
+            ui.copy(match = moved, battle = BattlePresentation(moved, BattleStage.RESULT, true, 1))
+        }
+        expectPulses(0)
+        compose.onNodeWithText("Opponent’s shot").assertExists()
+        compose.onNodeWithText("Your turn").assertDoesNotExist()
+        update { it.copy(battle = BattlePresentation(it.match!!, focusRevision = 2)) }
+        expectPulses(1)
+        compose.onNodeWithText("Your turn").assertExists()
+        update { it.copy(busy = true) }
+        update { it.copy(busy = false) }
+        expectPulses(1)
     }
 }

@@ -176,7 +176,7 @@ class UiTest {
         assertNull(vm.ui.value.opponentFleet)
         assertEquals(1, repo.data.value.solo!!.match.moves.size)
         compose.onNodeWithText("Fire").assertIsEnabled().performClick()
-        compose.waitUntil { vm.ui.value.resultVisible }
+        compose.waitUntil(5000) { compose.waitForIdle(); vm.ui.value.resultVisible }
         assertEquals("player", repo.data.value.solo!!.match.winner)
         assertEquals(repo.data.value.solo!!.aiFleet, vm.ui.value.opponentFleet)
         assertEquals(1, repo.data.value.records.size)
@@ -219,7 +219,7 @@ class UiTest {
                     compose.waitForIdle()
                     check(vm.ui.value.error == null) { vm.ui.value.errorDetail }
                     vm.ui.value.match?.moves?.size == (turn + 1) * 2 &&
-                        vm.ui.value.match?.current == "player"
+                        vm.ui.value.match?.current == "player" && vm.ui.value.battle?.canFire == true
                 }
                 compose.onNodeWithText("Your turn").assertExists()
                 assertNull(vm.ui.value.error)

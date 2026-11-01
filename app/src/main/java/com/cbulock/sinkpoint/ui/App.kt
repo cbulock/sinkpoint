@@ -255,7 +255,6 @@ fun outcomeTitle(match: MatchState): Int = if (match.winner == match.localId) {
         title = { Text(stringResource(outcomeTitle(match)), fontWeight = FontWeight.ExtraBold) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (won) VictoryCelebration(match.id)
-            TextButton(onClick = { model.showResult(false) }) { Text(stringResource(R.string.view_board)) }
             Surface(color = if (won) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.tertiaryContainer, shape = RoundedCornerShape(20.dp)) {
                 Text(stringResource(if (match.resigned != null) R.string.resigned_result else if (won) R.string.victory_detail else R.string.defeat_detail), Modifier.padding(16.dp))
             }
@@ -271,7 +270,8 @@ fun outcomeTitle(match: MatchState): Int = if (match.winner == match.localId) {
                 if (ui.rematchSent) Text(stringResource(R.string.rematch_wait))
                 OutlinedButton(onClick = { model.rematch(); model.showResult(false) }, enabled = ui.connected && !ui.rematchSent) { Text(stringResource(R.string.play_again)) }
             }
-        } }, confirmButton = { Button(onClick = model::home) { Text(stringResource(R.string.main_menu)) } })
+        } }, confirmButton = { Button(onClick = model::home) { Text(stringResource(R.string.main_menu)) } },
+        dismissButton = { TextButton(onClick = { model.showResult(false) }) { Text(stringResource(R.string.view_board)) } })
 }
 
 @Composable fun Metric(label: String, value: String) {
