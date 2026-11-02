@@ -1,6 +1,6 @@
 # Quick Play, Daily Fleet Hunt, and personal bests
 
-Status: proposed design, pending user approval. No product implementation yet.
+Status: approved by the user and implemented locally on November 2, 2026. See VALIDATION.md for verification scope.
 
 ## Intent and agreed scope
 

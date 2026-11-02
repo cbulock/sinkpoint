@@ -56,6 +56,7 @@ fun outcomeTitle(match: MatchState): Int = if (match.winner == match.localId) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable fun SinkpointApp(ui: UiState, model: GameViewModel) {
+    var replaceDaily by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     var replaceAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var resign by remember { mutableStateOf(false) }
@@ -86,7 +87,7 @@ fun outcomeTitle(match: MatchState): Int = if (match.winner == match.localId) {
                     TextButton(onClick = { model.navigate(Screen.SETTINGS) }) { Text(stringResource(R.string.settings)) }
                 } else {
                     TextButton(onClick = model::back) { Text(stringResource(R.string.back)) }
-                    if (ui.screen == Screen.GAME && LocalDensity.current.fontScale > 1.3f) Spacer(Modifier.weight(1f)) else Text(stringResource(when (ui.screen) { Screen.OPTIONS -> R.string.game_options; Screen.SETTINGS -> R.string.settings; Screen.STATISTICS -> R.string.statistics; Screen.LEARN -> R.string.learn; Screen.LOBBY -> R.string.nearby_play; else -> R.string.app_name }),
+                    if (ui.screen == Screen.GAME && LocalDensity.current.fontScale > 1.3f) Spacer(Modifier.weight(1f)) else Text(stringResource(when (ui.screen) { Screen.OPTIONS -> R.string.game_options; Screen.SETTINGS -> R.string.settings; Screen.STATISTICS -> R.string.statistics; Screen.LEARN -> R.string.learn; Screen.LOBBY -> R.string.nearby_play; Screen.DAILY -> R.string.daily_title; else -> R.string.app_name }),
                         style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(horizontal = 8.dp).semantics { heading() })
                     if (ui.screen == Screen.GAME) TextButton(onClick = model::home) { Text(stringResource(R.string.main_menu)) }
                 }
@@ -94,6 +95,7 @@ fun outcomeTitle(match: MatchState): Int = if (match.winner == match.localId) {
             if (!ui.loaded) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.loading)) }
             } else when (ui.screen) {
+                Screen.DAILY -> DailyScreen(ui, model::fireDaily, model::abandonDaily, model::practiceDaily, model::home)
                 Screen.HOME -> HomeScreen(
                     ui = ui,
                     onSolo = { difficulty -> replaceIfNeeded(Mode.AI) { model.startSolo(difficulty) } },
@@ -101,6 +103,12 @@ fun outcomeTitle(match: MatchState): Int = if (match.winner == match.localId) {
                     onResumeSolo = model::resumeSolo,
                     onResumeNearby = model::resumeNearby,
                     onNavigate = model::navigate,
+                    onQuick = { preset, difficulty -> replaceIfNeeded(Mode.AI) { model.startQuick(preset, difficulty) } },
+                    onDaily = {
+                        if (ui.daily.hunt?.active == true && ui.daily.hunt.date != ui.daily.today) replaceDaily = true
+                        else model.startDaily()
+                    },
+                    onResumeDaily = model::resumeDaily,
                 )
                 Screen.OPTIONS -> OptionsScreen(ui.preferences.config, model::configure)
                 Screen.GAME -> GameScreen(ui, model, onResign = { resign = true }, onReconnect = { nearby(false, true) })
@@ -158,6 +166,8 @@ fun outcomeTitle(match: MatchState): Int = if (match.winner == match.localId) {
         }
     }
     if (ui.busy) AlertDialog(onDismissRequest = model::cancelSetup, title = { Text(stringResource(R.string.checking_fleet)) }, text = { LinearProgressIndicator(Modifier.fillMaxWidth()) }, confirmButton = { TextButton(onClick = model::cancelSetup) { Text(stringResource(R.string.cancel)) } })
+    if (replaceDaily) ConfirmDialog(R.string.replace_daily_title, R.string.replace_daily_detail, R.string.start_daily,
+        { replaceDaily = false }, { replaceDaily = false; model.startDaily(replace = true) })
     replaceAction?.let { action -> ConfirmDialog(R.string.replace_title, R.string.replace_body, R.string.replace, { replaceAction = null }, { replaceAction = null; action() }) }
     if (resign) ConfirmDialog(R.string.resign_title, R.string.resign_body, R.string.resign, { resign = false }, { resign = false; model.resign() })
     ui.pairing?.let { p -> AlertDialog(onDismissRequest = { model.pairing(false) }, title = { Text(stringResource(R.string.pair_title)) }, text = { Text(stringResource(R.string.pair_detail, p.peer.name, p.code)) }, confirmButton = { Button(onClick = { model.pairing(true) }) { Text(stringResource(R.string.codes_match)) } }, dismissButton = { TextButton(onClick = { model.pairing(false) }) { Text(stringResource(R.string.cancel)) } }) }
@@ -259,6 +269,7 @@ fun outcomeTitle(match: MatchState): Int = if (match.winner == match.localId) {
                 Text(stringResource(if (match.resigned != null) R.string.resigned_result else if (won) R.string.victory_detail else R.string.defeat_detail), Modifier.padding(16.dp))
             }
             Text(configSummary(match.config)); Text(if (ui.mode == Mode.AI) difficultyName(ui.difficulty) else stringResource(R.string.nearby))
+            if (ui.bests.values.any { it.improvedBy(match.id) }) Text(stringResource(R.string.new_personal_best), color = MaterialTheme.colorScheme.primary)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Metric(stringResource(R.string.shots), match.outgoing.tried.size.toString())
                 Metric(stringResource(R.string.hits), match.outgoing.hits.size.toString())
@@ -305,6 +316,8 @@ fun outcomeTitle(match: MatchState): Int = if (match.winner == match.localId) {
             val records = ui.totals.filterKeys { it.startsWith("AI:${d.name}:") && (custom == null || it.endsWith(if (custom == true) "CUSTOM" else "CLASSIC")) }.values
             Section { Heading(difficultyName(d)); Text("${stringResource(R.string.wins)}: ${records.sumOf { it.wins }}  ·  ${stringResource(R.string.played)}: ${records.sumOf { it.played }}") }
         }
+        PersonalBestsSection(ui, mode, custom)
+        DailyStatistics(ui)
         Heading(stringResource(R.string.recent_results))
         val records = ui.records.filter { (mode == "ALL" || it.mode == mode) && (custom == null || it.custom == custom) }
         if (records.isEmpty()) Section { Heading(stringResource(R.string.no_results)); Text(stringResource(R.string.no_results_detail)) }

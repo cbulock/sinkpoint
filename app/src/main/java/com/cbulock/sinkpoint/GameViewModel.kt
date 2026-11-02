@@ -15,8 +15,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
+import java.time.LocalDate
 
-enum class Screen { HOME, OPTIONS, GAME, SETTINGS, STATISTICS, LEARN, LOBBY }
+enum class Screen { HOME, OPTIONS, GAME, SETTINGS, STATISTICS, LEARN, LOBBY, DAILY }
 enum class Mode { AI, NEARBY }
 data class ResumeSummary(val finished: Boolean, val shots: Int, val size: Int, val placement: Boolean)
 data class ImportSummary(val recentResults: Int, val hasAiProgress: Boolean)
@@ -49,12 +50,15 @@ data class UiState(
     val storageBlocked: Boolean = false,
     val opponentFleet: Fleet? = null,
     val battle: BattlePresentation? = null,
+    val daily: DailyUi = DailyUi(),
+    val bests: Map<String, PersonalBest> = emptyMap(),
 )
 
 class GameViewModel @JvmOverloads constructor(
     application: Application,
     private val repository: GameRepository = DiskGameRepository(application),
     private val transport: NearbyTransport = GoogleNearbyTransport(application),
+    private val today: () -> LocalDate = { LocalDate.now() },
 ) : AndroidViewModel(application) {
     private val mutex = Mutex()
     private var saved: AppData? = null
@@ -110,6 +114,7 @@ class GameViewModel @JvmOverloads constructor(
         val match = if (mutable.value.mode == Mode.AI) data.solo?.match else data.nearby?.match
         fun summary(m: MatchState) = ResumeSummary(m.phase == Phase.FINISHED, m.outgoing.tried.size, m.config.size, m.phase == Phase.PLACEMENT)
         mutable.update { it.copy(loaded = true, preferences = data.preferences, match = match,
+            daily = DailyUi.from(data.daily, today().toString()), bests = data.bests,
             opponentFleet = if (match?.phase == Phase.FINISHED) {
                 if (it.mode == Mode.AI) data.solo?.aiFleet else data.nearby?.peerFleet
             } else null,
@@ -182,7 +187,8 @@ class GameViewModel @JvmOverloads constructor(
         write { it.copy(preferences = preferences.copy(name = preferences.name.trim().take(32).ifBlank { "Player" })) }
     }
     fun configure(config: GameConfig) = settings(mutable.value.preferences.copy(config = config))
-    fun startSolo(difficulty: Difficulty, config: GameConfig = mutable.value.preferences.config) {
+    fun startQuick(preset: QuickPreset, difficulty: Difficulty) = startSolo(difficulty, preset.config(mutable.value.preferences.config), preset)
+    fun startSolo(difficulty: Difficulty, config: GameConfig = mutable.value.preferences.config, preset: QuickPreset? = null) {
         if (mutable.value.storageBlocked || saved == null) return
         val generation = ++setupGeneration
         setupJob?.cancel(); aiJob?.cancel()
@@ -197,7 +203,8 @@ class GameViewModel @JvmOverloads constructor(
                 mutex.withLock {
                     val data = requireNotNull(saved)
                     val match = MatchState(UUID.randomUUID().toString(), config, data.playerId, "ai", if (random.nextInt(2) == 0) data.playerId else "ai", peerReady = true)
-                    write { it.copy(solo = SoloSave(match, fleet, difficulty, random.state), preferences = it.preferences.copy(config = config)) }
+                    write { it.copy(solo = SoloSave(match, fleet, difficulty, random.state), preferences = it.preferences.copy(
+                        quickPreset = preset ?: it.preferences.quickPreset, quickDifficulty = difficulty)) }
                     mutable.update { it.copy(mode = Mode.AI, screen = Screen.GAME, busy = false, resultVisible = false) }; refresh()
                 }
             } catch (e: TimeoutCancellationException) { fail(R.string.layout_timeout) }
@@ -209,6 +216,37 @@ class GameViewModel @JvmOverloads constructor(
     fun cancelSetup() { setupGeneration++; setupJob?.cancel(); setupJob = null; mutable.update { it.copy(busy = false) } }
     fun resumeSolo() {
         mutable.update { it.copy(mode = Mode.AI, screen = Screen.GAME, resultVisible = false) }; refresh(); scheduleAi()
+    }
+    fun startDaily(replace: Boolean = false) = command {
+        val date = today().toString()
+        val next = requireNotNull(saved).daily.start(date, replace)
+        aiJob?.cancel(); pauseNearby()
+        write { it.copy(daily = next) }
+        navigate(Screen.DAILY)
+    }
+    fun resumeDaily() {
+        if (saved?.daily?.active != null) navigate(Screen.DAILY)
+    }
+    fun practiceDaily() = command {
+        val progress = requireNotNull(saved).daily
+        val hunt = requireNotNull(progress.active)
+        require(!hunt.active)
+        val next = progress.start(hunt.date)
+        write { it.copy(daily = next) }
+        navigate(Screen.DAILY)
+    }
+    fun fireDaily(cell: Int) = command {
+        if (!foreground || mutable.value.screen != Screen.DAILY) return@command
+        val progress = requireNotNull(saved).daily
+        val hunt = progress.active ?: return@command
+        // A second tap may already be queued when the first saved shot redraws the board.
+        if (!hunt.active || cell in hunt.knowledge.tried) return@command
+        val next = progress.fire(cell)
+        write { it.copy(daily = next) }
+    }
+    fun abandonDaily() = command {
+        val next = requireNotNull(saved).daily.abandon()
+        write { it.copy(daily = next) }
     }
     private suspend fun saveMatch(match: MatchState) {
         if (mutable.value.mode == Mode.AI) write { it.copy(solo = requireNotNull(it.solo).copy(match = match)) }
@@ -501,6 +539,7 @@ class GameViewModel @JvmOverloads constructor(
         if (!active) { aiJob?.cancel(); pauseNearby() }
         refreshPresentation()
         if (active) scheduleAi()
+        if (active) refresh()
     }
     fun export(uri: Uri) = command {
         val text = SaveFormat.encode(requireNotNull(saved))

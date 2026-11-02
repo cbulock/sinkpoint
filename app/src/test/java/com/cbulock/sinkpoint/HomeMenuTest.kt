@@ -7,6 +7,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.cbulock.sinkpoint.data.ThemeMode
 import com.cbulock.sinkpoint.game.Difficulty
+import com.cbulock.sinkpoint.game.QuickPreset
+import com.cbulock.sinkpoint.data.Preferences
 import com.cbulock.sinkpoint.ui.HomeScreen
 import com.cbulock.sinkpoint.ui.SinkpointTheme
 import org.junit.Assert.assertEquals
@@ -28,15 +30,29 @@ class HomeMenuTest {
     private var nearbyResumes = 0
     private var multiplayerStarts = 0
     private var chosen: Difficulty? = null
+    private var chosenPreset: QuickPreset? = null
 
     private fun show(state: UiState, dark: Boolean = false) {
         compose.setContent {
             SinkpointTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT) {
                 androidx.compose.material3.Surface {
-                    HomeScreen(state, { chosen = it }, { multiplayerStarts++ }, { soloResumes++ }, { nearbyResumes++ }, {})
+                    HomeScreen(state, { chosen = it }, { multiplayerStarts++ }, { soloResumes++ }, { nearbyResumes++ }, {},
+                        onQuick = { preset, difficulty -> chosenPreset = preset; chosen = difficulty })
                 }
             }
         }
+    }
+
+    @Test fun setupRemembersPresetAndDifficultyAndDoesNotStartOnSelection() {
+        show(UiState(loaded = true, preferences = Preferences(quickPreset = QuickPreset.SALVO, quickDifficulty = Difficulty.HARD)))
+        compose.onNodeWithTag("new-solo").performClick()
+        compose.onNodeWithText("Salvo").assertIsSelected()
+        compose.onNodeWithText("Hard").assertIsSelected()
+        compose.onNodeWithText("Skirmish").performClick()
+        assertEquals(null, chosenPreset)
+        compose.onNodeWithText("Start game").performClick()
+        assertEquals(QuickPreset.SKIRMISH, chosenPreset)
+        assertEquals(Difficulty.HARD, chosen)
     }
 
     private fun capture(name: String) {
@@ -61,6 +77,8 @@ class HomeMenuTest {
         assertEquals(null, chosen)
         compose.onNodeWithTag("new-solo").performClick()
         compose.onNodeWithText("Hard").performScrollTo().performClick()
+        assertEquals(null, chosen)
+        compose.onNodeWithText("Start game").performClick()
         assertEquals(Difficulty.HARD, chosen)
         compose.onNodeWithText("Choose your challenge").assertDoesNotExist()
     }
@@ -97,6 +115,7 @@ class HomeMenuTest {
         compose.onNodeWithText("Statistics").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("new-solo").performScrollTo().performClick()
         compose.onNodeWithText("Hard").performScrollTo().performClick()
+        compose.onNodeWithText("Start game").performClick()
         assertEquals(Difficulty.HARD, chosen)
     }
 

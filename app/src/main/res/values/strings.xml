@@ -136,11 +136,11 @@
     <string name="controls">Controls</string>
     <string name="haptics">Haptic feedback</string>
     <string name="backup">Backup and restore</string>
-    <string name="backup_note">Export settings, statistics, and AI progress. Nearby saves stay on these devices. Automatic cloud backup is off.</string>
+    <string name="backup_note">Export settings, statistics, personal bests, AI progress, and daily hunts. Nearby saves stay on these devices. Automatic cloud backup is off.</string>
     <string name="export_backup">Export backup</string>
     <string name="import_backup">Import backup</string>
     <string name="import_title">Replace from backup?</string>
-    <string name="import_detail">Includes %1$d recent results. Import replaces settings, statistics, and AI progress. Your nearby match stays on this device.</string>
+    <string name="import_detail">Includes %1$d recent match results. Import replaces settings, statistics, personal bests, AI progress, and daily hunts. Older backups clear daily progress and personal bests. Your nearby match stays on this device.</string>
     <string name="import_confirm">Import and replace</string>
     <string name="nearby_privacy">Nearby Connections uses Bluetooth and Wi-Fi directly. Google Play services may collect connection diagnostics; control this in your device’s Google Usage &amp; diagnostics settings. Sinkpoint adds no analytics.</string>
     <string name="all">All</string>
@@ -223,6 +223,48 @@
     <string name="opponent_progress">Opponent · Hits %1$d · Sunk %2$d/%3$d</string>
     <string name="no_opponent_moves">No shots at your fleet yet</string>
     <string name="return_to_target">Back to targeting</string>
+    <string name="quick_play">Set up solo game</string>
+    <string name="skirmish">Skirmish</string>
+    <string name="custom_preset">Custom</string>
+    <string name="start_game">Start game</string>
+    <string name="daily_title">Daily Fleet Hunt</string>
+    <string name="daily_detail">One hidden fleet. Find it in as few shots as possible.</string>
+    <string name="daily_first_attempt">First attempt · Counts toward records</string>
+    <string name="daily_practice">Practice · No records</string>
+    <string name="daily_forfeited">No recorded score</string>
+    <string name="daily_recorded_score">Recorded score: %1$d shots</string>
+    <string name="daily_shots">%1$d shots fired</string>
+    <plurals name="daily_shot_count">
+        <item quantity="one">%1$d shot fired</item>
+        <item quantity="other">%1$d shots fired</item>
+    </plurals>
+    <string name="daily_shot_result">%1$s · %2$s</string>
+    <string name="daily_sunk">Sunk!</string>
+    <string name="start_daily">Start hunt</string>
+    <string name="continue_daily">Continue hunt</string>
+    <string name="resume_dated_hunt">Continue %1$s</string>
+    <string name="practice">Practice</string>
+    <string name="daily_finished">Fleet found!</string>
+    <string name="daily_ended">Hunt ended</string>
+    <string name="fire_at">Fire at %1$s</string>
+    <string name="end_attempt">End attempt</string>
+    <string name="end_hunt">End hunt</string>
+    <string name="end_hunt_title">End this hunt?</string>
+    <string name="end_hunt_detail">This forfeits your recorded attempt for this date. You can replay the fleet as practice. To finish later, use Back instead.</string>
+    <string name="end_practice_detail">End this practice run and reveal the fleet? Your recorded score will not change.</string>
+    <string name="replace_daily_title">Start today’s hunt?</string>
+    <string name="replace_daily_detail">Your unfinished hunt will be abandoned. If it is a scored attempt, it will have no recorded score. You can cancel and finish it first.</string>
+    <string name="personal_bests">Personal bests</string>
+    <string name="personal_bests_note">Tracked from this update, separately for each mode, difficulty, and fleet setup. Shot records require sinking the whole fleet.</string>
+    <string name="no_bests">Finish a match to start your records.</string>
+    <string name="new_personal_best">New personal best!</string>
+    <string name="fewest_shots">Fewest shots</string>
+    <string name="best_accuracy">Best accuracy</string>
+    <string name="best_streak">Longest win streak</string>
+    <string name="current_streak">Current win streak</string>
+    <string name="more_records">Show more records</string>
+    <string name="daily_completed">Hunts completed</string>
+    <string name="daily_stats_note">First attempts only. Practice does not change these records. Each date has a different fleet.</string>
 </resources>
 
 

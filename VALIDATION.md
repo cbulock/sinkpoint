@@ -1,6 +1,48 @@
 # Sinkpoint validation
 
-Latest verification: October 18, 2026. This file distinguishes local automated checks from physical-device acceptance; dated sections below retain earlier results.
+Latest verification: November 2, 2026. This file distinguishes local automated checks from physical-device acceptance; dated sections below retain earlier results.
+
+### Quick Play, Daily Fleet Hunt, and personal bests — November 2, 2026
+
+Implemented presets, separate daily save/resume with first-attempt scoring,
+practice replay, and personal-best categories with preserved legacy statistics.
+The final functional suite ran **141 tests with zero failures/errors/skips**;
+`lintDebug` passed with 0 errors and 32 warnings, and debug assembly succeeded. Coverage includes daily golden fleet
+generation, midnight and clock rollback, abandoned attempts, history retention,
+backup migration, exact accuracy comparisons, resignation eligibility, remembered
+presets, failed writes/retries, and queued duplicate Fire taps.
+
+The initial unrestricted suite was deliberately stopped after nearly 13 minutes
+in the unchanged 800-fleet AI strength benchmark. Final verification excludes
+`HardAiTest.strongerAcrossIndependentFleets`, `HardStrengthTest`, and
+`HardMatchTest`; those long benchmarks are **not claimed complete**. Other AI
+correctness, rules, persistence, Nearby protocol, ViewModel, and Compose tests ran.
+The local command was:
+
+```powershell
+./gradlew.bat -I .rollout/feature-verification.gradle testDebugUnitTest lintDebug assembleDebug
+```
+
+The ignored verification init script only applies these test filters:
+
+```groovy
+allprojects {
+    tasks.withType(Test).configureEach {
+        filter {
+            excludeTestsMatching 'com.cbulock.sinkpoint.HardAiTest.strongerAcrossIndependentFleets'
+            excludeTestsMatching 'com.cbulock.sinkpoint.HardStrengthTest'
+            excludeTestsMatching 'com.cbulock.sinkpoint.HardMatchTest'
+        }
+    }
+}
+```
+
+Inspected Robolectric captures of daily play and results on a 360×640 phone,
+800×360 landscape, 800×1100 tablet, and 200% text. A landscape test checks that H8
+and Fire are both visible; the board and controls use adjacent columns. Images
+are under `app/build/outputs/screenshots/daily-*.png`.
+A fresh read-only review found no actionable issues. No physical-device or
+two-device radio testing was performed, and nothing was published.
 
 ### Tablet space usage — October 18, 2026
 

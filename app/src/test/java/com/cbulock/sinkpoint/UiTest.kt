@@ -62,6 +62,7 @@ class UiTest {
         compose.onNodeWithTag("new-solo").performClick()
         compose.onNodeWithText("Medium").assertDoesNotExist()
         compose.onNodeWithText("Normal").performScrollTo().performClick()
+        compose.onNodeWithText("Start game").performClick()
         compose.waitUntil(5000) {
             compose.waitForIdle()
             repo.data.value.solo != null
@@ -124,6 +125,7 @@ class UiTest {
         val repo = MemoryRepository(AppData(playerId = "player", solo = s)); show(repo)
         compose.onNodeWithTag("new-solo").performClick()
         compose.onNodeWithText("Easy").performScrollTo().performClick()
+        compose.onNodeWithText("Start game").performClick()
         compose.onNodeWithText("Replace unfinished match?").assertExists()
         compose.onNodeWithText("Cancel").performClick()
         assertEquals("existing", repo.data.value.solo?.match?.id)

@@ -19,7 +19,8 @@ import java.io.OutputStream
 import java.util.UUID
 
 @Serializable enum class ThemeMode { SYSTEM, LIGHT, DARK }
-@Serializable data class Preferences(val theme: ThemeMode = ThemeMode.SYSTEM, val haptics: Boolean = true, val name: String = "Player", val config: GameConfig = GameConfig())
+@Serializable data class Preferences(val theme: ThemeMode = ThemeMode.SYSTEM, val haptics: Boolean = true, val name: String = "Player", val config: GameConfig = GameConfig(),
+    val quickPreset: QuickPreset = QuickPreset.CLASSIC, val quickDifficulty: Difficulty = Difficulty.NORMAL)
 @Serializable data class SoloSave(val match: MatchState, val aiFleet: Fleet, val difficulty: Difficulty, val randomState: Long) {
     fun validate() {
         match.validate(); require(Rules.validFleet(match.config, aiFleet))
@@ -42,6 +43,8 @@ import java.util.UUID
     val totals: Map<String, Aggregate> = emptyMap(),
     val recordedSoloId: String? = null,
     val recordedNearbyId: String? = null,
+    val daily: DailyProgress = DailyProgress(),
+    val bests: Map<String, PersonalBest> = emptyMap(),
 ) {
     fun validate() {
         require(version == 1 && playerId.length in 1..64 && preferences.name.length in 1..32)
@@ -50,6 +53,8 @@ import java.util.UUID
         require(records.size <= 100 && records.map { it.id }.distinct().size == records.size)
         records.forEach { require(it.mode in listOf("AI", "NEARBY") && it.shots >= it.hits && it.hits >= 0 && it.date >= 0) }
         totals.values.forEach { require(it.played >= it.wins && it.wins >= 0 && it.shots >= it.hits && it.hits >= 0) }
+        daily.validate()
+        bests.forEach { (key, best) -> best.validate(); require(key == best.category.key) }
     }
     fun withResults(now: Long = System.currentTimeMillis()): AppData {
         var result = this
@@ -60,7 +65,10 @@ import java.util.UUID
             val r = Record(match.id, mode, difficulty, !match.config.classic, match.winner == match.localId, match.outgoing.tried.size, match.outgoing.hits.size, now)
             val key = "$mode:${difficulty?.name ?: "LOCAL"}:${if (r.custom) "CUSTOM" else "CLASSIC"}"
             val old = result.totals[key] ?: Aggregate()
+            val category = BestCategory.of(mode, difficulty, match.config)
+            val best = (result.bests[category.key] ?: PersonalBest(category)).record(match, now)
             result = result.copy(records = (listOf(r) + result.records.filterNot { it.id == r.id }).take(100),
+                bests = result.bests + (category.key to best),
                 totals = result.totals + (key to Aggregate(old.played + 1, old.wins + if (r.won) 1 else 0, old.shots + r.shots, old.hits + r.hits)),
                 recordedSoloId = if (mode == "AI") match.id else result.recordedSoloId,
                 recordedNearbyId = if (mode == "NEARBY") match.id else result.recordedNearbyId)
@@ -70,8 +78,9 @@ import java.util.UUID
         return result
     }
 }
-@Serializable data class Backup(val version: Int = 1, val preferences: Preferences, val solo: SoloSave?, val records: List<Record>, val totals: Map<String, Aggregate>, val recordedSoloId: String?) {
-    fun validate() = AppData(version = version, preferences = preferences, solo = solo, records = records, totals = totals).validate()
+@Serializable data class Backup(val version: Int = 1, val preferences: Preferences, val solo: SoloSave?, val records: List<Record>, val totals: Map<String, Aggregate>, val recordedSoloId: String?,
+    val daily: DailyProgress = DailyProgress(), val bests: Map<String, PersonalBest> = emptyMap()) {
+    fun validate() = AppData(version = version, preferences = preferences, solo = solo, records = records, totals = totals, daily = daily, bests = bests).validate()
 }
 
 interface GameRepository {
@@ -100,7 +109,7 @@ object SaveFormat {
         require(text.toByteArray().size <= MAX_BACKUP_BYTES)
         return json.decodeFromJsonElement<AppData>(migrateMatches(text)).also { it.validate() }
     }
-    fun encode(data: AppData): String = json.encodeToString(Backup(preferences = data.preferences, solo = data.solo, records = data.records, totals = data.totals, recordedSoloId = data.recordedSoloId))
+    fun encode(data: AppData): String = json.encodeToString(Backup(preferences = data.preferences, solo = data.solo, records = data.records, totals = data.totals, recordedSoloId = data.recordedSoloId, daily = data.daily, bests = data.bests))
     fun decode(text: String): Backup {
         require(text.toByteArray().size <= MAX_BACKUP_BYTES) { "Backup is too large" }
         return json.decodeFromJsonElement<Backup>(migrateMatches(text)).also { it.validate() }
@@ -108,7 +117,7 @@ object SaveFormat {
     fun restore(current: AppData, backup: Backup): AppData {
         backup.validate()
         return current.copy(preferences = backup.preferences, solo = backup.solo, records = backup.records, totals = backup.totals,
-            recordedSoloId = backup.recordedSoloId).also { it.validate() }
+            recordedSoloId = backup.recordedSoloId, daily = backup.daily, bests = backup.bests).also { it.validate() }
     }
 }
 class DiskGameRepository(context: Context) : GameRepository {

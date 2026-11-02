@@ -28,6 +28,7 @@ import com.cbulock.sinkpoint.ResumeSummary
 import com.cbulock.sinkpoint.Screen
 import com.cbulock.sinkpoint.UiState
 import com.cbulock.sinkpoint.game.Difficulty
+import com.cbulock.sinkpoint.game.QuickPreset
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -38,6 +39,9 @@ fun HomeScreen(
     onResumeSolo: () -> Unit,
     onResumeNearby: () -> Unit,
     onNavigate: (Screen) -> Unit,
+    onQuick: (QuickPreset, Difficulty) -> Unit = { _, difficulty -> onSolo(difficulty) },
+    onDaily: () -> Unit = {},
+    onResumeDaily: () -> Unit = {},
 ) {
     var choosingDifficulty by rememberSaveable { mutableStateOf(false) }
     Page(760) {
@@ -56,6 +60,7 @@ fun HomeScreen(
                 solo(Modifier.fillMaxWidth()); multiplayer(Modifier.fillMaxWidth())
             }
         }
+        DailyEntry(ui, onDaily, onResumeDaily)
         if (ui.solo?.finished == false || ui.nearby?.finished == false) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Heading(stringResource(R.string.continue_playing))
@@ -92,23 +97,38 @@ fun HomeScreen(
             }
         }
     }
-    if (choosingDifficulty) AlertDialog(
+    if (choosingDifficulty) {
+        var preset by rememberSaveable { mutableStateOf(ui.preferences.quickPreset) }
+        var difficulty by rememberSaveable { mutableStateOf(ui.preferences.quickDifficulty) }
+        val config = preset.config(ui.preferences.config)
+        AlertDialog(
         onDismissRequest = { choosingDifficulty = false },
-        title = { Text(stringResource(R.string.choose_difficulty)) },
+        title = { Text(stringResource(R.string.quick_play)) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Difficulty.entries.forEachIndexed { index, difficulty ->
-                    DifficultyRow(difficulty, !ui.storageBlocked) {
-                        choosingDifficulty = false
-                        onSolo(difficulty)
-                    }
-                    if (index < Difficulty.entries.lastIndex) HorizontalDivider()
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuickPreset.entries.forEach { choice -> FilterChip(preset == choice, { preset = choice }, label = { Text(presetName(choice)) }) }
                 }
+                Text(configSummary(config), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.fleet_lengths, config.lengths.joinToString(" · ")), style = MaterialTheme.typography.bodySmall)
+                if (preset == QuickPreset.CUSTOM) TextButton(onClick = { choosingDifficulty = false; onNavigate(Screen.OPTIONS) }) { Text(stringResource(R.string.game_options)) }
+                Heading(stringResource(R.string.choose_difficulty))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Difficulty.entries.forEach { choice -> FilterChip(difficulty == choice, { difficulty = choice }, label = { Text(difficultyName(choice)) }) }
+                }
+                Text(stringResource(when (difficulty) { Difficulty.EASY -> R.string.easy_detail; Difficulty.NORMAL -> R.string.normal_detail; Difficulty.HARD -> R.string.hard_detail }), style = MaterialTheme.typography.bodySmall)
             }
         },
-        confirmButton = { TextButton(onClick = { choosingDifficulty = false }) { Text(stringResource(R.string.cancel)) } },
-    )
+        confirmButton = { Button(onClick = { choosingDifficulty = false; onQuick(preset, difficulty) }, enabled = !ui.storageBlocked) { Text(stringResource(R.string.start_game)) } },
+        dismissButton = { TextButton(onClick = { choosingDifficulty = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
 }
+
+@Composable fun presetName(preset: QuickPreset) = stringResource(when (preset) {
+    QuickPreset.SKIRMISH -> R.string.skirmish; QuickPreset.CLASSIC -> R.string.classic
+    QuickPreset.SALVO -> R.string.salvo; QuickPreset.CUSTOM -> R.string.custom_preset
+})
 
 @Composable
 private fun PlayModeCard(multiplayer: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
