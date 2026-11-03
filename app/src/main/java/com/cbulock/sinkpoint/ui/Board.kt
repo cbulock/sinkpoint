@@ -172,8 +172,8 @@ data class BoardTransform(val side: Float, val margin: Float, val zoom: Float, v
                         drawLine(colors.onSurfaceVariant, center - Offset(half, half), center + Offset(half, half), t.cell * .065f, StrokeCap.Round)
                         drawLine(colors.onSurfaceVariant, center + Offset(-half, half), center + Offset(half, -half), t.cell * .065f, StrokeCap.Round)
                     }
-                    if (index in selected || index in previewCells || index in sunkCells) {
-                        drawRoundRect(if (index in previewCells && !previewValid) colors.error else if (index in sunkCells) colors.tertiary else colors.primary,
+                    if (index in selected || index in previewCells) {
+                        drawRoundRect(if (index in previewCells && !previewValid) colors.error else colors.primary,
                             origin, tile, CornerRadius(t.cell * .15f), style = Stroke(2.dp.toPx()))
                     }
                 }
@@ -196,6 +196,17 @@ data class BoardTransform(val side: Float, val margin: Float, val zoom: Float, v
                         origin, Size(last.x - origin.x, last.y - origin.y), CornerRadius(t.cell * .15f),
                         style = if (remaining) Stroke(2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(t.cell * .16f, t.cell * .10f)))
                             else Stroke(1.5.dp.toPx()))
+                }
+                knowledge.sunk.forEach { ship ->
+                    if (ship.cells.isEmpty()) return@forEach
+                    val left = ship.cells.minOf { it % config.size }
+                    val right = ship.cells.maxOf { it % config.size }
+                    val top = ship.cells.minOf { it / config.size }
+                    val bottom = ship.cells.maxOf { it / config.size }
+                    val origin = t.origin(top * config.size + left) + Offset(gap, gap)
+                    drawRoundRect(colors.tertiary, origin,
+                        Size((right - left + 1) * t.cell - 2 * gap, (bottom - top + 1) * t.cell - 2 * gap),
+                        CornerRadius(t.cell * .15f), style = Stroke(2.dp.toPx()))
                 }
                 // Draw this after fleet outlines so the latest volley remains prominent.
                 latestMove.forEach { index ->

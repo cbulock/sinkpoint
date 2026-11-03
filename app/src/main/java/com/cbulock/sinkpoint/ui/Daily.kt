@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
@@ -52,9 +53,10 @@ fun dailyDate(date: String): String = if (date.isEmpty()) "" else LocalDate.pars
     val hunt = ui.daily.hunt ?: return
     var selected by rememberSaveable(hunt.id, hunt.knowledge.moves.size) { mutableStateOf<Int?>(null) }
     var confirming by rememberSaveable { mutableStateOf(false) }
+    var detailsHeightPx by remember { mutableIntStateOf(0) }
     val haptics = LocalHapticFeedback.current
     val details: @Composable () -> Unit = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.onSizeChanged { detailsHeightPx = it.height }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(dailyDate(hunt.date), style = MaterialTheme.typography.titleMedium)
             }
@@ -79,12 +81,13 @@ fun dailyDate(date: String): String = if (date.isEmpty()) "" else LocalDate.pars
             }
         }
     }
-    val board: @Composable () -> Unit = {
+    val board: @Composable (Modifier) -> Unit = { modifier ->
         FleetBoard(hunt.id, hunt.config, fleet = hunt.revealedFleet, knowledge = hunt.knowledge,
                 selected = selected?.let(::setOf).orEmpty(), enabled = hunt.active && !ui.storageBlocked,
                 onSelect = { cell -> if (cell !in hunt.knowledge.tried) selected = cell.takeUnless { it == selected } },
                 latestMove = hunt.knowledge.moves.lastOrNull()?.targets?.toSet().orEmpty(),
-                showFleetStatus = true, showZoomControls = false, opponent = true, highlightRemainingShips = !hunt.active)
+                showFleetStatus = true, showZoomControls = false, opponent = true, highlightRemainingShips = !hunt.active,
+                modifier = modifier)
     }
     val controls: @Composable () -> Unit = {
         Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
@@ -110,15 +113,20 @@ fun dailyDate(date: String): String = if (date.isEmpty()) "" else LocalDate.pars
         if (maxWidth >= 600.dp && maxHeight < 500.dp && LocalDensity.current.fontScale <= 1.3f) {
             val boardWidth = minOf(maxHeight - 72.dp, maxWidth * .55f).coerceAtLeast(160.dp)
             Row(Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(boardWidth)) { board() }
+                Box(Modifier.width(boardWidth)) { board(Modifier) }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(8.dp)) { details() }
                     controls()
                 }
             }
         } else Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Column(Modifier.weight(1f).widthIn(max = 680.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) { details(); board() }
+            BoxWithConstraints(Modifier.weight(1f).widthIn(max = 680.dp).fillMaxWidth()) {
+                val detailsHeight = with(LocalDensity.current) { detailsHeightPx.toDp() }
+                val boardWidth = minOf(maxWidth - 40.dp, maxHeight - detailsHeight - 76.dp).coerceAtLeast(160.dp)
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) { details(); board(Modifier.width(boardWidth)) }
+            }
             controls()
         }
     }

@@ -1,11 +1,13 @@
 package com.cbulock.sinkpoint
 
+import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.test.core.app.ApplicationProvider
 import com.cbulock.sinkpoint.game.*
 import com.cbulock.sinkpoint.ui.*
 import org.junit.Assert.*
@@ -13,9 +15,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.RuntimeEnvironment
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
@@ -72,6 +74,17 @@ class DailyUiTest {
         show()
         compose.onNodeWithTag("daily-fire").assertIsDisplayed()
         capture("daily-large-text")
+    }
+    @Test fun phoneShowsEntireBoardAboveFireWithoutScrolling() {
+        progress = progress.fire(1)
+        val vm = GameViewModel(ApplicationProvider.getApplicationContext<Application>(), MemoryRepository(), NoRadio())
+        compose.setContent { SinkpointTheme(com.cbulock.sinkpoint.data.ThemeMode.LIGHT) {
+            SinkpointApp(UiState(loaded = true, screen = Screen.DAILY, daily = DailyUi.from(progress, "2026-11-02")), vm)
+        } }
+        val lastCell = compose.onNodeWithContentDescription("H8, untried").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val fire = compose.onNodeWithTag("daily-fire").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("The bottom row must fit above Fire", lastCell.bottom < fire.top)
+        capture("daily-with-header")
     }
     @Test @Config(qualifiers = "w800dp-h360dp-xhdpi") fun landscapeKeepsFireReachable() {
         show(); compose.onNodeWithTag("daily-fire").assertIsDisplayed()
