@@ -61,6 +61,12 @@ internal object HardAi {
     )
 
     suspend fun targets(knowledge: Knowledge, count: Int, random: GameRandom, searchBudget: Int = SEARCH_BUDGET): List<Int> {
+        val planned = plannedTargets(knowledge, count, random, searchBudget)
+        if (count == 1) forcedContinuation(knowledge)?.let { return listOf(it) }
+        return planned
+    }
+
+    private suspend fun plannedTargets(knowledge: Knowledge, count: Int, random: GameRandom, searchBudget: Int): List<Int> {
         require(count in 1..(knowledge.config.size * knowledge.config.size - knowledge.tried.size))
         currentCoroutineContext().ensureActive()
         // Sampling has its own reproducible stream; spending more inference work
