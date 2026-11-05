@@ -57,6 +57,76 @@ internal class AttackSimulation(private val config: GameConfig) {
         return chosen
     }
 
+    enum class Style { PROBABILITY, PARITY, ENDPOINT }
+
+    private class Scores(size: Int) {
+        val coverage = IntArray(size)
+        val pursuit = IntArray(size)
+        val priority = IntArray(size)
+        val line = IntArray(size)
+        fun combined() = IntArray(coverage.size) { priority[it] * 1_000_000 + pursuit[it] + coverage[it] }
+    }
+
+    private fun analyze(state: State): Scores {
+        val scores = Scores(cellMasks.size)
+        val forbidden = state.tried.without(state.hits) or state.forbidden
+        val unresolved = state.hits.without(state.destroyed)
+        for (id in options.indices) if (state.alive[id]) for (p in options[id]) {
+            if (p.mask.intersects(forbidden) || state.tried.contains(p.mask)) continue
+            // A no-touch ship may not leave a separate public hit in its border.
+            if (!config.touching && p.border.intersects(unresolved.without(p.mask))) continue
+            val damage = p.mask.count() - p.mask.without(unresolved).count()
+            for (index in p.cells.indices) {
+                val cell = p.cells[index]
+                if (state.tried.intersects(cellMasks[cell])) continue
+                scores.coverage[cell]++
+                if (damage == 0) continue
+                val before = index > 0 && unresolved.intersects(cellMasks[p.cells[index - 1]])
+                val after = index < p.cells.lastIndex && unresolved.intersects(cellMasks[p.cells[index + 1]])
+                val priority = when {
+                    before && after -> 3 // Fill a gap before extending an already connected contact.
+                    (before || after) && damage >= 2 -> 2
+                    before || after -> 1
+                    else -> 0 // Do not jump over an unknown square along a damaged ship.
+                }
+                scores.priority[cell] = maxOf(scores.priority[cell], priority)
+                if (priority > 0) scores.pursuit[cell] += 100 * damage
+                scores.line[cell] = maxOf(scores.line[cell], if (priority > 0) damage else 0)
+            }
+        }
+        return scores
+    }
+
+    private fun defensiveTargets(
+        state: State, count: Int, random: GameRandom,
+        style: Style,
+    ): List<Int> {
+        val analysis = analyze(state)
+        val scores = analysis.combined()
+        val candidates = scores.indices.filter { !state.tried.intersects(cellMasks[it]) }.toMutableList()
+        val hunting = state.hits.without(state.destroyed).empty()
+        val stride = config.lengths.indices.filter { state.alive[it] }.minOfOrNull { config.lengths[it] } ?: 2
+        val chosen = ArrayList<Int>(minOf(count, candidates.size))
+        repeat(minOf(count, candidates.size)) {
+            // Parity applies only inside feasible ship coverage, including after sink borders.
+            val feasible = candidates.filter { analysis.coverage[it] > 0 }.ifEmpty { candidates }
+            val eligible = if (style == Style.PARITY && hunting) {
+                feasible.filter { (it / config.size + it % config.size) % stride == 0 }.ifEmpty { feasible }
+            } else feasible
+            fun value(cell: Int): Double = when {
+                style == Style.PARITY && hunting -> 0.0
+                style == Style.ENDPOINT && !hunting -> analysis.priority[cell] * 1_000_000.0 + analysis.line[cell] * 10_000.0 + analysis.pursuit[cell] + analysis.coverage[cell]
+                else -> scores[cell].toDouble()
+            }
+            val best = eligible.maxOf { value(it) }
+            val tied = eligible.filter { value(it) == best }
+            val cell = tied[random.nextInt(tied.size)]
+            chosen.add(cell); candidates.remove(cell)
+        }
+        return chosen
+    }
+
+
     fun observe(state: State, fleet: List<HardAi.Placement>, targets: List<Int>) {
         val shots = HardAi.mask(targets)
         state.tried = state.tried or shots
@@ -70,14 +140,15 @@ internal class AttackSimulation(private val config: GameConfig) {
         }
     }
 
-    suspend fun finish(initial: State, fleet: List<HardAi.Placement>, first: List<Int>, quota: Int, random: GameRandom, parity: Boolean = false): Int {
+    suspend fun finish(initial: State, fleet: List<HardAi.Placement>, first: List<Int>, quota: Int, random: GameRandom, parity: Boolean = false, defenseStyle: Style? = null): Int {
         val context = currentCoroutineContext()
         val state = initial.copy()
         var fired = first.size
         observe(state, fleet, first)
         while (state.alive.any { it }) {
             context.ensureActive()
-            val shots = targets(state, quota, random, parity)
+            val shots = if (defenseStyle == null) targets(state, quota, random, parity)
+                else defensiveTargets(state, quota, random, defenseStyle)
             check(shots.isNotEmpty())
             observe(state, fleet, shots)
             fired += shots.size
